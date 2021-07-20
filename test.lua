@@ -1,7 +1,9 @@
 makeGrammar = require "PegGrammarFactory"
 inspect = require "inspect"
 
---[[
+print(debug.getinfo(1).source)
+print(inspect(arg))
+
 local function readFile(path)
     local file = io.open(path, "r")
     if not file then
@@ -12,53 +14,7 @@ local function readFile(path)
     return content
 end
 
-source = readFile("peg.peg")
-]]
-
-source = [[
-# Hierarchical syntax
-Grammar    <- Spacing Definition+ EndOfFile
-Definition <- Identifier LEFTARROW Expression
-
-Expression <- Sequence (SLASH Sequence)*
-Sequence   <- Prefix*
-Prefix     <- (AND / NOT)? Suffix
-Suffix     <- Primary (QUESTION / STAR / PLUS)?
-Primary    <- Identifier !LEFTARROW
-            / OPEN Expression CLOSE
-            / Literal / Class / DOT
-
-# Lexical syntax
-Identifier <- IdentStart IdentCont* Spacing
-IdentStart <- [a-zA-Z_]
-IdentCont  <- IdentStart / [0-9]
-
-Literal    <- ['] (!['] Char)* ['] Spacing
-            / ["] (!["] Char)* ["] Spacing
-Class      <- '[' (!']' Range)* ']' Spacing
-Range      <- Char '-' Char / Char
-Char       <- '\\' [nrt'"\[\]\\]
-            / '\\' [0-2][0-7][0-7]
-            / '\\' [0-7][0-7]?
-            / !'\\' .
-
-LEFTARROW  <- '<-' Spacing
-SLASH      <- '/' Spacing
-AND        <- '&' Spacing
-NOT        <- '!' Spacing
-QUESTION   <- '?' Spacing
-STAR       <- '*' Spacing
-PLUS       <- '+' Spacing
-OPEN       <- '(' Spacing
-CLOSE      <- ')' Spacing
-DOT        <- '.' Spacing
-
-Spacing    <- (Space / Comment)*
-Comment    <- '#' (!EndOfLine .)* EndOfLine
-Space      <- ' ' / '\t' / EndOfLine
-EndOfLine  <- '\r\n' / '\n' / '\r'
-EndOfFile  <- !.
-]]
+source = readFile(arg[0]:gsub("test.lua", "peg.peg"))
 
 function decorator(Op)
     return function(...)
@@ -81,8 +37,8 @@ print(inspect(rules, {
     depth = 1
 }))
 
+--[[
 indent = 0
-
 for name, rule in pairs(rules) do
     local oldParse = rule.parse
     local newParse = function(src, pos)
@@ -108,6 +64,9 @@ for name, rule in pairs(rules) do
     end
     rule.parse = newParse
 end
+]]
 
-print(rules.Grammar.parse(source))
-print(#source)
+match, tree = rules.Grammar.parse(source, 1)
+print(match, "=", #source)
+
+print(inspect(tree))

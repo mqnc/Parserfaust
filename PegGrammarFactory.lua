@@ -16,12 +16,12 @@ return function(operatorDecorator)
     local Seq = operatorDecorator(peg.Sequence)
     local Cho = operatorDecorator(peg.OrderedChoice)
     local Rep = operatorDecorator(peg.Repetition)
-    local Peek = operatorDecorator(peg.LookAhead)
-    local GeneralPtr = operatorDecorator(peg.Pointer)
+    local And = operatorDecorator(peg.LookAhead)
+    local Ptr = operatorDecorator(peg.Pointer)
 
     -- pointer in rules environment
     local P = function(name)
-        return GeneralPtr(name, rules)
+        return Ptr(name, rules)
     end
 
     -- zero or more
@@ -41,7 +41,7 @@ return function(operatorDecorator)
 
     -- negative look ahead
     local Not = function(op)
-        return Peek(op, false)
+        return And(op, false)
     end
 
     -- # Hierarchical syntax
@@ -82,22 +82,22 @@ return function(operatorDecorator)
     -- IdentCont <- IdentStart / [0-9]
     rules.IdentCont = Cho(P("IdentStart"), Rng("0", "9"))
 
-    -- Literal <- ['] (!['] rngr)* ['] Spacing
-    --          / ["] (!["] rngr)* ["] Spacing
-    rules.Literal = Cho(Seq(Lit("'"), Zom(Seq(Not(Lit("'")), P("rngr"))), Lit(""), P("Spacing")), --
-    Seq(Lit('"'), Zom(Seq(Not(Lit('"')), P("rngr"))), Lit('"'), P("Spacing")))
+    -- Literal <- ['] (!['] Char)* ['] Spacing
+    --          / ["] (!["] Char)* ["] Spacing
+    rules.Literal = Cho(Seq(Lit("'"), Zom(Seq(Not(Lit("'")), P("Char"))), Lit(""), P("Spacing")), --
+    Seq(Lit('"'), Zom(Seq(Not(Lit('"')), P("Char"))), Lit('"'), P("Spacing")))
 
     -- Class <- '[' (!']' Range)* ']' Spacing
     rules.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), P("Range"))), Lit("]"), P("Spacing"))
 
-    -- Range <- rngr '-' rngr / rngr
-    rules.Range = Cho(Seq(P("rngr"), Lit("-"), P("rngr")), P("rngr"))
+    -- Range <- Char '-' Char / Char
+    rules.Range = Cho(Seq(P("Char"), Lit("-"), P("Char")), P("Char"))
 
-    -- rngr <- '\\' [nrt'"\[\]\\]
+    -- Char <- '\\' [nrt'"\[\]\\]
     --       / '\\' [0-2][0-7][0-7]
     --       / '\\' [0-7][0-7]?
     --       / !'\\' .
-    rules.rngr = Cho(Seq(Lit("\\\\"), Cho(Lit("n"), Lit("r"), Lit("t"), Lit("'"), Lit('"'), Lit("["), Lit("]"))), --
+    rules.Char = Cho(Seq(Lit("\\\\"), Cho(Lit("n"), Lit("r"), Lit("t"), Lit("'"), Lit('"'), Lit("["), Lit("]"))), --
     Seq(Lit("\\\\"), Rng("0", "2"), Rng("0", "7"), Rng("0", "7")), --
     Seq(Lit("\\\\"), Rng("0", "7"), Opt(Rng("0", "7"))), --
     Seq(Not(Lit("\\\\")), Any()))

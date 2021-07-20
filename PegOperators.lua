@@ -7,9 +7,10 @@ return {
                 str = str
             },
             parse = function(src, pos)
-                pos = pos or 1
                 if src:sub(pos, pos + #str - 1) == str then
-                    return #str
+                    return #str, {
+                        ['"'] = str
+                    }
                 else
                     return -1
                 end
@@ -25,10 +26,11 @@ return {
                 to = to
             },
             parse = function(src, pos)
-                pos = pos or 1
                 local c = src:sub(pos, pos)
                 if from <= c and c <= to then
-                    return 1
+                    return 1, {
+                        ['-'] = c
+                    }
                 else
                     return -1
                 end
@@ -41,11 +43,12 @@ return {
             type = "Any",
             config = {},
             parse = function(src, pos)
-                pos = pos or 1
                 if pos > #src then
                     return -1
                 else
-                    return 1
+                    return 1, {
+                        ['.'] = src:sub(pos, pos)
+                    }
                 end
             end
         }
@@ -59,17 +62,21 @@ return {
                 ops = ops
             },
             parse = function(src, pos)
-                pos = pos or 1
                 local match = 0
+                local tree = {}
+
                 for i, op in ipairs(ops) do
-                    local m = op.parse(src, pos + match)
+                    local m, twig = op.parse(src, pos + match)
                     if m == -1 then
                         return -1
                     else
                         match = match + m
+                        table.insert(tree, {m, twig})
                     end
                 end
-                return match
+                return match, {
+                    [','] = tree
+                }
             end
         }
     end,
@@ -82,11 +89,12 @@ return {
                 ops = ops
             },
             parse = function(src, pos)
-                pos = pos or 1
                 for i, op in ipairs(ops) do
-                    local m = op.parse(src, pos)
+                    local m, twig = op.parse(src, pos)
                     if m ~= -1 then
-                        return m
+                        return m, {
+                            ['/'] = twig
+                        }
                     end
                 end
                 return -1
@@ -94,6 +102,14 @@ return {
         }
     end,
     Repetition = function(op, min, max)
+        local icon = '^'
+        if min == 0 and max == 1 then
+            icon = '?'
+        elseif min == 0 and max == math.huge then
+            icon = '*'
+        elseif min == 1 and max == math.huge then
+            icon = '+'
+        end
         return {
             type = "Repetition",
             config = {
@@ -102,21 +118,26 @@ return {
                 max = max
             },
             parse = function(src, pos)
-                pos = pos or 1
                 local match = 0
+                local tree = {}
                 for i = 1, max do
-                    local m = op.parse(src, pos + match)
+                    local m, twig = op.parse(src, pos + match)
                     if m == -1 then
                         if i > min then
-                            return match
+                            return match, {
+                                [icon] = tree
+                            }
                         else
                             return -1
                         end
                     else
                         match = match + m
+                        table.insert(tree, {m, twig})
                     end
                 end
-                return match
+                return match, {
+                    [icon] = tree
+                }
             end
         }
     end,
@@ -125,6 +146,10 @@ return {
         if posneg == nil then
             posneg = true
         end
+        local icon = '&'
+        if posneg == false then
+            icon = '!'
+        end
         return {
             type = "LookAhead",
             config = {
@@ -132,10 +157,11 @@ return {
                 posneg = posneg
             },
             parse = function(src, pos)
-                pos = pos or 1
                 local m = op.parse(src, pos)
                 if (m ~= -1) == posneg then
-                    return 0
+                    return 0, {
+                        [icon] = true
+                    }
                 else
                     return -1
                 end
@@ -152,8 +178,10 @@ return {
                 env = env
             },
             parse = function(src, pos)
-                pos = pos or 1
-                return env[name].parse(src, pos)
+                local m, tree = env[name].parse(src, pos)
+                return m, {
+                    ['@' .. name] = tree
+                }
             end
         }
     end
