@@ -1,8 +1,10 @@
 makeGrammar = require "PegGrammarFactory"
+inspectGrammar = require "PegGrammarInspector"
+
 inspect = require "inspect"
 
-print(debug.getinfo(1).source)
-print(inspect(arg))
+-- print(debug.getinfo(1).source)
+-- print(inspect(arg))
 
 local function readFile(path)
     local file = io.open(path, "r")
@@ -19,7 +21,7 @@ source = readFile(arg[0]:gsub("test.lua", "peg.peg"))
 function decorator(Op)
     return function(...)
         local operator = Op(...)
-        if operator.type == "Pointer" then
+        if operator.type == "Reference" then
             local oldParse = operator.parse
             local newParse = function(src, pos)
                 print(operator.config.name)
@@ -31,11 +33,6 @@ function decorator(Op)
     end
 end
 decorator = nil
-
-rules = makeGrammar(decorator)
-print(inspect(rules, {
-    depth = 1
-}))
 
 --[[
 indent = 0
@@ -66,7 +63,9 @@ for name, rule in pairs(rules) do
 end
 ]]
 
-match, tree = rules.Grammar.parse(source, 1)
-print(match, "=", #source)
+grammar = makeGrammar(decorator)
+len, tree = grammar.Grammar.parse(source)
+print(len, "=", #source)
+print(inspectGrammar(grammar))
 
-print(inspect(tree))
+-- print(inspect(tree))

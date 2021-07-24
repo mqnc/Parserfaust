@@ -1,4 +1,4 @@
-peg = require "PegOperators"
+ops = require "PegOperators"
 
 return function(operatorDecorator)
 
@@ -10,18 +10,19 @@ return function(operatorDecorator)
 
     local rules = {}
 
-    local Lit = operatorDecorator(peg.Literal)
-    local Rng = operatorDecorator(peg.Range)
-    local Any = operatorDecorator(peg.Any)
-    local Seq = operatorDecorator(peg.Sequence)
-    local Cho = operatorDecorator(peg.OrderedChoice)
-    local Rep = operatorDecorator(peg.Repetition)
-    local And = operatorDecorator(peg.LookAhead)
-    local Ptr = operatorDecorator(peg.Pointer)
+    local Lit = operatorDecorator(ops.Literal)
+    local Rng = operatorDecorator(ops.Range)
+    local Any = operatorDecorator(ops.Any)
+    local Seq = operatorDecorator(ops.Sequence)
+    local Cho = operatorDecorator(ops.OrderedChoice)
+    local Rep = operatorDecorator(ops.Repetition)
+    local And = operatorDecorator(ops.LookAhead)
+    local Rule = operatorDecorator(ops.Rule)
+    local Ref = operatorDecorator(ops.Reference)
 
-    -- pointer in rules environment
-    local P = function(name)
-        return Ptr(name, rules)
+    -- set rules environment for references
+    local R = function(name)
+        return Ref(name, rules)
     end
 
     -- zero or more
@@ -44,102 +45,118 @@ return function(operatorDecorator)
         return And(op, false)
     end
 
+    -- action for ignoring arguments
+    local Ignore = function()
+    end
+	debug.getinfo(Ignore).name = "Ignore"
+
     -- # Hierarchical syntax
 
     -- Grammar <- Spacing Definition+ EndOfFile
-    rules.Grammar = Seq(P("Spacing"), Oom(P("Definition")), P("EndOfFile"))
+    rules.Grammar = Seq(R("Spacing"), Oom(R("Definition")), R("EndOfFile"))
 
     -- Definition <- Identifier LEFTARROW Expression
-    rules.Definition = Seq(P("Identifier"), P("LEFTARROW"), P("Expression"))
+    rules.Definition = Seq(R("Identifier"), R("LEFTARROW"), R("Expression"))
 
     -- Expression <- Sequence (SLASH Sequence)*
-    rules.Expression = Seq(P("Sequence"), Zom(Seq(P("SLASH"), P("Sequence"))))
+    rules.Expression = Seq(R("Sequence"), Zom(Seq(R("SLASH"), R("Sequence"))))
 
     -- Sequence <- Prefix*
-    rules.Sequence = Zom(P("Prefix"))
+    rules.Sequence = Zom(R("Prefix"))
 
     -- Prefix <- (AND / NOT)? Suffix
-    rules.Prefix = Seq(Opt(Cho(P("AND"), P("NOT"))), P("Suffix"))
+    rules.Prefix = Seq(Opt(Cho(R("AND"), R("NOT"))), R("Suffix"))
 
     -- Suffix <- Primary (QUESTION / STAR / PLUS)?
-    rules.Suffix = Seq(P("Primary"), Opt(Cho(P("QUESTION"), P("STAR"), P("PLUS"))))
+    rules.Suffix = Seq(R("Primary"), Opt(Cho(R("QUESTION"), R("STAR"), R("PLUS"))))
 
     -- Primary <- Identifier !LEFTARROW
     --          / OPEN Expression CLOSE
     --          / Literal / Class / DOT
-    rules.Primary = Cho(Seq(P("Identifier"), Not(P("LEFTARROW"))), --
-    Seq(P("OPEN"), P("Expression"), P("CLOSE")), --
-    P("Literal"), P("Class"), P("DOT"))
+    rules.Primary = Cho(Seq(R("Identifier"), Not(R("LEFTARROW"))), --
+    Seq(R("OPEN"), R("Expression"), R("CLOSE")), --
+    R("Literal"), R("Class"), R("DOT"))
 
     -- # Lexical syntax
 
     -- Identifier <- IdentStart IdentCont* Spacing
-    rules.Identifier = Seq(P("IdentStart"), Zom(P("IdentCont")), P("Spacing"))
+    rules.Identifier = Rule(Seq(R("IdentStart"), Zom(R("IdentCont")), R("Spacing")), --
+    function(src, pos, len, tree)
+        return {
+            -- pos + tree[1].len (=1) + tree[2].len -1
+            id = src:sub(pos, pos + tree[2].len)
+        }
+    end)
 
     -- IdentStart <- [a-zA-Z_]
-    rules.IdentStart = Cho(Rng("a", "z"), Rng("A", "Z"), Lit("_"))
+    rules.IdentStart = Rule(Cho(Rng("a", "z"), Rng("A", "Z"), Rng("_")), Ignore)
 
     -- IdentCont <- IdentStart / [0-9]
-    rules.IdentCont = Cho(P("IdentStart"), Rng("0", "9"))
+    rules.IdentCont = Rule(Cho(R("IdentStart"), Rng("0", "9")), Ignore)
 
     -- Literal <- ['] (!['] Char)* ['] Spacing
     --          / ["] (!["] Char)* ["] Spacing
-    rules.Literal = Cho(Seq(Lit("'"), Zom(Seq(Not(Lit("'")), P("Char"))), Lit(""), P("Spacing")), --
-    Seq(Lit('"'), Zom(Seq(Not(Lit('"')), P("Char"))), Lit('"'), P("Spacing")))
+    rules.Literal = Rule(Cho(Seq(Lit("'"), Zom(Seq(Not(Lit("'")), R("Char"))), Lit(""), R("Spacing")), --
+    Seq(Lit('"'), Zom(Seq(Not(Lit('"')), R("Char"))), Lit('"'), R("Spacing"))), --
+    function(src, pos, len, tree)
+        print(src:sub(pos, pos + len))
+        -- print(inspect(tree, {depth=1}))
+        return {}
+    end)
 
     -- Class <- '[' (!']' Range)* ']' Spacing
-    rules.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), P("Range"))), Lit("]"), P("Spacing"))
+    rules.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), R("Range"))), Lit("]"), R("Spacing"))
 
     -- Range <- Char '-' Char / Char
-    rules.Range = Cho(Seq(P("Char"), Lit("-"), P("Char")), P("Char"))
+    rules.Range = Cho(Seq(R("Char"), Lit("-"), R("Char")), R("Char"))
 
     -- Char <- '\\' [nrt'"\[\]\\]
     --       / '\\' [0-2][0-7][0-7]
     --       / '\\' [0-7][0-7]?
     --       / !'\\' .
-    rules.Char = Cho(Seq(Lit("\\\\"), Cho(Lit("n"), Lit("r"), Lit("t"), Lit("'"), Lit('"'), Lit("["), Lit("]"))), --
+    rules.Char = Cho(Seq(Lit("\\\\"), Cho(Rng("n"), Rng("r"), Rng("t"), Rng("'"), Rng('"'), Rng("["), Lit("]"))), --
     Seq(Lit("\\\\"), Rng("0", "2"), Rng("0", "7"), Rng("0", "7")), --
     Seq(Lit("\\\\"), Rng("0", "7"), Opt(Rng("0", "7"))), --
     Seq(Not(Lit("\\\\")), Any()))
 
     -- LEFTARROW <- '<-' Spacing
-    rules.LEFTARROW = Seq(Lit("<-"), P("Spacing"))
+    rules.LEFTARROW = Seq(Lit("<-"), R("Spacing"))
 
     -- SLASH <- '/' Spacing
-    rules.SLASH = Seq(Lit("/"), P("Spacing"))
+    rules.SLASH = Seq(Lit("/"), R("Spacing"))
 
     -- AND <- '&' Spacing
-    rules.AND = Seq(Lit("&"), P("Spacing"))
+    rules.AND = Seq(Lit("&"), R("Spacing"))
 
     -- NOT <- '!' Spacing
-    rules.NOT = Seq(Lit("!"), P("Spacing"))
+    rules.NOT = Seq(Lit("!"), R("Spacing"))
 
     -- QUESTION <- '?' Spacing
-    rules.QUESTION = Seq(Lit("?"), P("Spacing"))
+    rules.QUESTION = Seq(Lit("?"), R("Spacing"))
 
     -- STAR <- '*' Spacing
-    rules.STAR = Seq(Lit("*"), P("Spacing"))
+    rules.STAR = Seq(Lit("*"), R("Spacing"))
 
     -- PLUS <- '+' Spacing
-    rules.PLUS = Seq(Lit("+"), P("Spacing"))
+    rules.PLUS = Seq(Lit("+"), R("Spacing"))
 
     -- OPEN <- '(' Spacing
-    rules.OPEN = Seq(Lit("("), P("Spacing"))
+    rules.OPEN = Seq(Lit("("), R("Spacing"))
 
     -- CLOSE <- ')' Spacing
-    rules.CLOSE = Seq(Lit(")"), P("Spacing"))
+    rules.CLOSE = Seq(Lit(")"), R("Spacing"))
 
     -- DOT <- '.' Spacing
-    rules.DOT = Seq(Lit("."), P("Spacing"))
+    rules.DOT = Seq(Lit("."), R("Spacing"))
 
     -- Spacing <- (Space / Comment)*
-    rules.Spacing = Zom(Cho(P("Space"), P("Comment")))
+    rules.Spacing = Zom(Cho(R("Space"), R("Comment")))
 
     -- Comment <- '#' (!EndOfLine .)* EndOfLine
-    rules.Comment = Seq(Lit("#"), Zom(Seq(Not(P("EndOfLine")), Any())), P("EndOfLine"))
+    rules.Comment = Seq(Lit("#"), Zom(Seq(Not(R("EndOfLine")), Any())), R("EndOfLine"))
 
     -- Space <- ' ' / '\t' / EndOfLine
-    rules.Space = Cho(Lit(" "), Lit("\t"), P("EndOfLine"))
+    rules.Space = Cho(Lit(" "), Lit("\t"), R("EndOfLine"))
 
     -- EndOfLine <- '\r\n' / '\n' / '\r'
     rules.EndOfLine = Cho(Lit("\r\n"), Lit("\n"), Lit("\r"))
