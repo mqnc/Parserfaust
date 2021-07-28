@@ -1,4 +1,4 @@
-function escape(str)
+function pegEscape(str)
     local replace = {
         ["\n"] = "\\n",
         ["\r"] = "\\r",
@@ -9,83 +9,99 @@ function escape(str)
         ["]"] = "\\]",
         ["\\"] = "\\\\"
     }
-    return str:gsub("([\n\r\t%\'%\"%[%]\\])", function(k)
+    local result = str:gsub("([\n\r\t%\'%\"%[%]\\])", function(k)
         return replace[k]
     end)
+    return result
 end
 
-function walk(op)
+function walk(op, opDeco, esc)
 
     if op.getType() == "Literal" then
-        return '"' .. escape(op.getConfig().str) .. '"'
+        return opDeco(op, esc('"' .. pegEscape(op.getConfig().str) .. '"'))
 
     elseif op.getType() == "Range" then
         local from = op.getConfig().from
         local to = op.getConfig().to
         if from == to then
-            return "[" .. escape(from) .. "]"
+            return opDeco(op, esc("[" .. pegEscape(from) .. "]"))
         else
-            return "[" .. escape(from) .. "-" .. escape(to) .. "]"
+            return opDeco(op, esc("[" .. pegEscape(from) .. "-" .. pegEscape(to) .. "]"))
         end
 
     elseif op.getType() == "Any" then
-        return "."
+        return opDeco(op, esc("."))
 
     elseif op.getType() == "Sequence" then
         local stream = {}
         for i, child in ipairs(op.getConfig().ops) do
-            table.insert(stream, walk(child))
+            table.insert(stream, walk(child, opDeco, esc))
         end
-        return "(" .. table.concat(stream, " ") .. ")"
+        return opDeco(op, esc("(") .. table.concat(stream, esc(" ")) .. esc(")"))
 
     elseif op.getType() == "OrderedChoice" then
         local stream = {}
         for i, child in ipairs(op.getConfig().ops) do
-            table.insert(stream, walk(child))
+            table.insert(stream, walk(child, opDeco, esc))
         end
-        return "(" .. table.concat(stream, " / ") .. ")"
+        return opDeco(op, esc("(") .. table.concat(stream, esc(" / ")) .. esc(")"))
 
     elseif op.getType() == "Repetition" then
         local min = op.getConfig().min
         local max = op.getConfig().max
-        local inner = walk(op.getConfig().op)
+        local inner = walk(op.getConfig().op, opDeco, esc)
         if min == 0 and max == 1 then
-            return "(" .. inner .. ")?"
+            return opDeco(op, esc("(") .. inner .. esc(")?"))
         elseif min == 0 and max == math.huge then
-            return "(" .. inner .. ")*"
+            return opDeco(op, esc("(") .. inner .. esc(")*"))
         elseif min == 1 and max == math.huge then
-            return "(" .. inner .. ")+"
+            return opDeco(op, esc("(") .. inner .. esc(")+"))
         else
-            return "(" .. inner .. ")*" --
-            .. tostring(min) .. ":" .. tostring(max)
+            return opDeco(op, esc("(") .. inner .. esc(")*") --
+            .. tostring(min) .. esc(":") .. tostring(max))
         end
 
     elseif op.getType() == "LookAhead" then
         if op.getConfig().posneg == true then
-            return "&(" .. walk(op.getConfig().op) .. ")"
+            return opDeco(op, esc("&(") .. walk(op.getConfig().op, opDeco, esc) .. esc(")"))
         else
-            return "!(" .. walk(op.getConfig().op) .. ")"
+            return opDeco(op, esc("!(") .. walk(op.getConfig().op, opDeco, esc) .. esc(")"))
         end
 
     elseif op.getType() == "Rule" then
         local info = debug.getinfo(op.getConfig().action)
         local name = info.short_src .. ":" .. tostring(info.linedefined)
-        return walk(op.getConfig().op) .. " # " .. name .. "()"
+        return opDeco(op, walk(op.getConfig().op, opDeco, esc) .. esc(" # " .. name .. "()"))
 
     elseif op.getType() == "Reference" then
-        return op.getConfig().target
+        return opDeco(op, esc(op.getConfig().target))
 
     else
-        return "<?>"
+        return opDeco(op, esc("<?>"))
 
     end
 end
 
-return function(grammar)
-    local stream = {}
-    for rule, definition in pairs(grammar) do
-        table.insert(stream, rule .. " <- " --
-        .. walk(definition) .. "\n")
+return function(grammar, opDeco, esc)
+
+    if opDeco == nil then
+        opDeco = function(op, str)
+            return str
+        end
     end
-    return table.concat(stream, "")
+
+    if esc == nil then
+        esc = function(str)
+            return str
+        end
+    end
+
+    local result = {}
+
+    for rule, op in pairs(grammar) do
+		result[rule] = opDeco(op, esc(rule .. " <- ") --
+        .. walk(op, opDeco, esc))
+    end
+
+    return result
 end

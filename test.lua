@@ -1,10 +1,10 @@
 makeGrammar = require "PegGrammarFactory"
 inspectGrammar = require "PegGrammarInspector"
-
-inspect = require "inspect"
+htmlDebug = require "htmlDebug"
+explore = require "inspect"
 
 -- print(debug.getinfo(1).source)
--- print(inspect(arg))
+-- print(explore(arg))
 
 local function readFile(path)
     local file = io.open(path, "r")
@@ -68,4 +68,6 @@ len, tree = grammar.Grammar.parse(source)
 print(len, "=", #source)
 print(inspectGrammar(grammar))
 
--- print(inspect(tree))
+htmlDebug(makeGrammar, "Grammar", source)
+
+-- print(explore(tree))

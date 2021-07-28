@@ -1,24 +1,24 @@
 ops = require "PegOperators"
 
-return function(operatorDecorator)
+return function(opDeco)
 
-    if operatorDecorator == nil then
-        operatorDecorator = function(op)
+    if opDeco == nil then
+        opDeco = function(op)
             return op
         end
     end
 
     local rules = {}
 
-    local Lit = operatorDecorator(ops.Literal)
-    local Rng = operatorDecorator(ops.Range)
-    local Any = operatorDecorator(ops.Any)
-    local Seq = operatorDecorator(ops.Sequence)
-    local Cho = operatorDecorator(ops.OrderedChoice)
-    local Rep = operatorDecorator(ops.Repetition)
-    local And = operatorDecorator(ops.LookAhead)
-    local Rule = operatorDecorator(ops.Rule)
-    local Ref = operatorDecorator(ops.Reference)
+    local Lit = opDeco(ops.Literal)
+    local Rng = opDeco(ops.Range)
+    local Any = opDeco(ops.Any)
+    local Seq = opDeco(ops.Sequence)
+    local Cho = opDeco(ops.OrderedChoice)
+    local Rep = opDeco(ops.Repetition)
+    local And = opDeco(ops.LookAhead)
+    local Rule = opDeco(ops.Rule)
+    local Ref = opDeco(ops.Reference)
 
     -- set rules environment for references
     local R = function(name)
@@ -53,7 +53,7 @@ return function(operatorDecorator)
     -- # Hierarchical syntax
 
     -- Grammar <- Spacing Definition+ EndOfFile
-    rules.Grammar = Seq(R("Spacing"), Oom(R("Definition")), R("EndOfFile"))
+    rules.Grammar = Rule(Seq(R("Spacing"), Oom(R("Definition")), R("EndOfFile")))
 
     -- Definition <- Identifier LEFTARROW Expression
     rules.Definition = Seq(R("Identifier"), R("LEFTARROW"), R("Expression"))
@@ -100,7 +100,7 @@ return function(operatorDecorator)
     Seq(Lit('"'), Zom(Seq(Not(Lit('"')), R("Char"))), Lit('"'), R("Spacing"))), --
     function(src, pos, len, tree)
         print(src:sub(pos, pos + len))
-        -- print(inspect(tree, {depth=1}))
+        -- print(explore(tree, {depth=1}))
         return {}
     end)
 
