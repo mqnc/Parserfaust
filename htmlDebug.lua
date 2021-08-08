@@ -1,22 +1,49 @@
-local inspect = require "PegGrammarInspector"
+require "object"
+local T = object.typeKey
+local makeStringifier = require "PegStringify"
 
-return function(grammarFactory, startRule, source)
+local icon = {
+    ["Op/Literal"] = '"',
+    ["Op/Range"] = '𝄩',
+    ["Op/Any"] = '.',
+    ["Op/Repetition/Optional"] = '?',
+    ["Repetition/ZeroOrMore"] = '*',
+    ["Repetition/OneOrMore"] = '+',
+    ["Op/Repetition"] = '𝄇',
+    ["LookAhead/And"] = '&',
+    ["LookAhead/Not"] = '!',
+    ["Op/Sequence"] = '⋯',
+    ["Op/Choice"] = '/',
+    ["Op/Action"] = 'f',
+    ["Op/Reference"] = '@'
+}
+
+return function(grammar, startRule, source)
 
     local id = 0
     local log = {}
+
+    local types = {}
 
     function decorator(Op)
         return function(...)
             id = id + 1
             local operator = Op(...)
             operator.id = id
+            types[id] = icon[operator[T]]
             local oldParse = operator.parse
             local newParse = function(src, pos)
-                table.insert(log, "[" .. tostring(operator.id) .. "," --
-                .. tostring(pos) .. "],")
+                if operator[T] == "Reference" then
+                    table.insert(log, --
+                    "[" .. operator.target .. "," .. pos .. "],")
+                end
+                table.insert(log, "[" .. operator.id .. "," .. pos .. "],")
                 local len, tree = oldParse(src, pos)
-                table.insert(log, "[-" .. tostring(operator.id) .. "," --
-                .. tostring(pos) .. "," .. len .. "],")
+                table.insert(log, "[" .. operator.id .. "," .. pos .. "," .. len .. "],")
+                if operator[T] == "Reference" then
+                    table.insert(log, --
+                    "['" .. operator.target .. "'," .. pos .. "," .. len .. "],")
+                end
                 return len, tree
             end
             operator.parse = newParse
@@ -27,57 +54,38 @@ return function(grammarFactory, startRule, source)
     local grammar = grammarFactory(decorator)
     local numOperators = id
 
-    local deco = function(op, str)
-        return '<span id="' .. tostring(op.id) .. '">' .. str .. '</span>'
+    print(table.concat(types, "','"))
+
+    local stringify = makeStringifier()
+
+    stringify.Grammar = function(grammar)
+        local result = {}
+        for rule, op in pairs(grammar) do
+            table.insert(result, "\01" .. rule .. "\02" .. rule .. --
+            "\03 <- " .. stringify(op) .. "\n")
+        end
+        return (table.concat(result):gsub("\n\n", "\n"))
     end
 
-    local esc = function(str)
-        local replace = {
-            ["\n"] = "<br>\n",
-            ["&"] = "&amp;",
-            ["<"] = "&lt;",
-            [">"] = "&gt;",
-            ['"'] = "&quot;",
-            ["'"] = "&apos;"
-        }
-        local result = str:gsub("([\n%&%<%>%\"%\'])", function(k)
-            return replace[k]
-        end)
-        return result
-    end
-
-    local rules = inspect(grammar, deco, esc)
-
-    local ruleList = {}
-    for rule, str in pairs(grammar) do
-        ruleList[grammar[rule].id] = rule
-    end
-
-    local ps = {}
-    local ruleListJs = {"{"}
-    for i = 1, numOperators do
-        local rule = ruleList[i]
-        if rule ~= nil then
-            table.insert(ps, '<p id="' .. rule .. '">' .. rules[rule] .. '</p>')
-            table.insert(ruleListJs, tostring(i) .. ':"' .. rule .. '",')
+    for operator, original in pairs(stringify) do
+        if operator ~= "Grammar" and operator ~= T .. "string" then
+            stringify[operator] = function(op)
+                return "\01" .. op.id .. "\02" .. original(op) .. "\03"
+            end
         end
     end
-    table.insert(ruleListJs, "}")
 
-    do
-        local file = io.open("rules.html", "w")
-        file:write(table.concat(ps, "\n"))
-        file:close()
-    end
+    local replace = {
+        ["\01"] = '<span id="',
+        ["\02"] = '">',
+        ["\03"] = '</span>',
+        ["\n"] = "<br>\n",
+        ["&"] = "&amp;",
+        ["<"] = "&lt;",
+        [">"] = "&gt;",
+        ['"'] = "&quot;",
+        ["'"] = "&apos;"
+    }
 
-    table.insert(log, "[")
-    grammar[startRule].parse(source, 1)
-    table.insert(log, "]")
-
-    do
-        local file = io.open("log.js", "w")
-        file:write(table.concat(ruleListJs) .. "\n" .. table.concat(log))
-        file:close()
-    end
-
+    print((stringify(grammar):gsub("[\01\02\03\n%&%<%>%\"%\']", replace)))
 end

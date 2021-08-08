@@ -1,73 +1,27 @@
-makeGrammar = require "PegGrammarFactory"
-inspectGrammar = require "PegGrammarInspector"
-htmlDebug = require "htmlDebug"
-explore = require "inspect"
-
--- print(debug.getinfo(1).source)
--- print(explore(arg))
+makeLoggingGrammar = require "LoggingGrammar"
+opf = require "OperatorFactory"
+fillPegGrammar = require "PegGrammarFactory"
+inspect = (require "inspect").inspect
 
 local function readFile(path)
     local file = io.open(path, "r")
-    if not file then
-        return nil
-    end
-    local content = file:read("*a")
+    local data = file:read("*a")
     file:close()
-    return content
+    return data
 end
+
+local function writeFile(path, data)
+    local file = io.open(path, "w")
+    file:write(data)
+    file:close()
+end
+
+operators = opf.makeFactory()
+grammar = makeLoggingGrammar()
+fillPegGrammar(grammar, operators)
 
 source = readFile(arg[0]:gsub("test.lua", "peg.peg"))
 
-function decorator(Op)
-    return function(...)
-        local operator = Op(...)
-        if operator.type == "Reference" then
-            local oldParse = operator.parse
-            local newParse = function(src, pos)
-                print(operator.config.name)
-                return oldParse(src, pos)
-            end
-            operator.parse = newParse
-        end
-        return operator
-    end
-end
-decorator = nil
+print(grammar.Grammar.parse(source, 1))
 
---[[
-indent = 0
-for name, rule in pairs(rules) do
-    local oldParse = rule.parse
-    local newParse = function(src, pos)
-        pos = pos or 1
-
-        local tabs = ""
-        for i = 1, indent do
-            tabs = tabs .. "|  "
-        end
-
-        print(tabs .. "? >" .. string.sub(src, pos, pos + 20):gsub("\n", "↵") .. ".. == " .. name)
-
-        indent = indent + 1
-        local result = oldParse(src, pos)
-        indent = indent - 1
-
-        if result == -1 then
-            print(tabs .. "X >" .. string.sub(src, pos, pos + 20):gsub("\n", "↵") .. ".. != " .. name)
-        else
-            print(tabs .. "v >" .. string.sub(src, pos, pos + 20):gsub("\n", "↵") .. ".. == " .. name)
-        end
-        return result
-    end
-    rule.parse = newParse
-end
-]]
-
-grammar = makeGrammar(decorator)
-len, tree = grammar.Grammar.parse(source)
-print(len, "=", #source)
-print(inspectGrammar(grammar))
-
-htmlDebug(makeGrammar, "Grammar", source)
-
--- print(explore(tree))
+writeFile("test.js", tostring(grammar))
