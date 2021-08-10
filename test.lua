@@ -1,27 +1,17 @@
-makeLoggingGrammar = require "LoggingGrammar"
-opf = require "OperatorFactory"
-fillPegGrammar = require "PegGrammarFactory"
-inspect = (require "inspect").inspect
+local osf = require "OperatorSuperFactory"
+local pgf = require "PegGrammarFactory"
+local inspect = (require "inspect").inspect
+local utils = require "utils"
+local object = require "object"
+local html = require "htmlLoggingGrammar"
 
-local function readFile(path)
-    local file = io.open(path, "r")
-    local data = file:read("*a")
-    file:close()
-    return data
-end
+-- fillPegGrammar(grammar, operators)
 
-local function writeFile(path, data)
-    local file = io.open(path, "w")
-    file:write(data)
-    file:close()
-end
+source = utils.readFile(arg[0]:gsub("test.lua", "peg.peg"))
+len, tree = parser.parse(source)
 
-operators = opf.makeFactory()
-grammar = makeLoggingGrammar()
-fillPegGrammar(grammar, operators)
+html.print()
 
-source = readFile(arg[0]:gsub("test.lua", "peg.peg"))
+-- print(grammar(source))
 
-print(grammar.Grammar.parse(source, 1))
-
-writeFile("test.js", tostring(grammar))
+-- utils.writeFile("test.js", tostring(grammar))

@@ -1,20 +1,40 @@
 local tag = require "tag"
-require "object"
-local Object = object.Object
-local opf = require "OperatorFactory"
+local object = require "object"
+local osf = require "OperatorSuperFactory"
 
 local g = {}
 
-g.type = tag:derive("Grammar", {"create", "setStart"})
+g.type = tag:create("Grammar", {"create", "setStart", "decorate"})
 
 function g.create()
-    local grammar = Object("Grammar", nil, object.CHRONOLOGICAL_ORDER)
+    local grammar = object.Object(g.type, nil, object.CHRONOLOGICAL_ORDER)
 end
 
 function g.setStart(grammar, ruleName)
-    local start = opf.makeFactory().Reference(ruleName, grammar)
+    local start = osf.makeOperatorFactory().Reference(ruleName, grammar)
+    object.setCall(grammar, function(src)
+        return start(src, 1)
+    end)
+end
 
-    grammar[CALL] = start
+g.decorate = object.Dispatcher()
+
+g.decorate[osf.OpType] = function(op, decorator)
+    decorator(op)
+    if op.op ~= nil then
+        g.decorate(op.op, decorator)
+    end
+    if op.ops ~= nil then
+        for _, child in ipairs(op.ops) do
+            g.decorate(child, decorator)
+        end
+    end
+end
+
+g.decorate[g.type] = function(grammar, decorator)
+    for rule, op in pairs(grammar) do
+        g.decorate(op, decorator)
+    end
 end
 
 return g

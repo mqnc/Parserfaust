@@ -4,15 +4,15 @@ mt.__index = mt
 local IS_TAG = {}
 mt[IS_TAG] = true
 
-function mt:derive(name, additionalMembers)
+function mt:derive(label, newMembers)
 
     local derived = {
         parent = self
     }
     if self ~= nil then
-        derived.name = self.name .. "." .. name
+        derived.label = self.label .. "." .. label
     else
-        derived.name = name
+        derived.label = label
     end
     derived.members = {}
 
@@ -23,8 +23,8 @@ function mt:derive(name, additionalMembers)
         end
     end
 
-    if additionalMembers then
-        for _, m in ipairs(additionalMembers) do
+    if newMembers then
+        for _, m in ipairs(newMembers) do
             table.insert(derived.members, m)
             derived.members[m] = true
         end
@@ -48,19 +48,7 @@ function mt:includes(other)
     return false
 end
 
---[[
-function mt:resolve(candidates)
-    local gen = self
-    repeat
-        if candidates[gen] ~= nil then
-            return candidates[gen]
-        end
-        gen = gen.parent
-    until gen == nil
-    return nil
-end
-]]
-
-local tag = mt.derive(nil, "*", nil)
+local tag = mt.derive(nil, "__root", nil)
+tag.create = mt.derive
 
 return tag

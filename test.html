@@ -4,9 +4,11 @@
 	<meta charset="utf-8" />
 	<style>
 		:root {
-			--editor-fg: red;
+			--editor-fg: black;
 			--editor-bg: #cad8db;
 			--editor-border: #333333;
+			--update-fg: black;
+			--update-bg: gold;
 			--enter-fg: white;
 			--enter-bg: #5599ff;
 			--accept-fg: black;
@@ -17,7 +19,6 @@
 			--in-stack-fg: black;
 			--in-stack-bg: rgba(200, 100, 255, 0.2);
 		}
-
 
 		body {
 			font-family: monospace;
@@ -112,8 +113,13 @@
 		.reject0 {
 			background: linear-gradient(90deg, var(--reject-bg) 0%, var(--editor-bg) 70%);
 		}
+
+		.update {
+			color: var(--update-fg);
+			background-color: var(--update-bg);
+		}
 	</style>
-	<script src="testdata.js"></script>
+	<script src="test.js"></script>
 	<script>
 
 		let source = `# Hierarchical syntax
@@ -159,11 +165,6 @@ Space      <- ' ' / '\t' / EndOfLine
 EndOfLine  <- '\r\n' / '\n' / '\r'
 EndOfFile  <- !.
 `
-
-		let rules = { 6: "Grammar", 10: "Definition", 16: "Expression", 18: "Sequence", 24: "Prefix", 31: "Suffix", 43: "Primary", 49: "Identifier", 54: "IdentStart", 58: "IdentCont", 78: "Literal", 87: "Class", 93: "Range", 118: "Char", 121: "LEFTARROW", 124: "SLASH", 127: "AND", 130: "NOT", 133: "QUESTION", 136: "STAR", 139: "PLUS", 142: "OPEN", 145: "CLOSE", 148: "DOT", 152: "Spacing", 160: "Comment", 164: "Space", 168: "EndOfLine", 170: "EndOfFile", }
-
-		let types = ['', '@', '@', '+', '@', '⋯', '←', '@', '@', '@', '⋯', '@', '@', '@', '⋯', '*', '⋯', '@', '*', '@', '@', '/', '?', '@', '⋯', '@', '@', '@', '@', '/', '?', '⋯', '@', '@', '!', '⋯', '@', '@', '@', '⋯', '@', '@', '@', '/', '@', '@', '*', '@', '⋯', '←', '[]', '[]', '[]', '/', '←', '@', '[]', '/', '←', '"', '"', '!', '@', '⋯', '*', '"', '@', '⋯', '"', '"', '!', '@', '⋯', '*', '"', '@', '⋯', '/', '←', '"', '"', '!', '@', '⋯', '*', '"', '@', '⋯', '@', '"', '@', '⋯', '@', '/', '"', '[]', '[]', '[]', '[]', '[]', '[]', '"', '/', '⋯', '"', '[]', '[]', '[]', '⋯', '"', '[]', '[]', '?', '⋯', '"', '!', '.', '⋯', '/', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '"', '@', '⋯', '@', '@', '/', '*', '"', '@', '!', '.', '⋯', '*', '@', '⋯', '"', '"', '@', '/', '"', '"', '"', '/', '.', '!']
-
 	</script>
 </head>
 
@@ -180,105 +181,10 @@ EndOfFile  <- !.
 			<button onclick="stepIn()">↘</button>
 			<button onclick="stepOut()">↗</button>
 			&nbsp;
-			<input type="checkbox" class="baby" oninput="toggleBaby()">baby steps&nbsp;&nbsp;&nbsp;
-			onSelect=
-			<input type="radio" name="onclick" value="first">first hit
-			<input type="radio" name="onclick" value="final" checked="checked">final hit
+			<input type="checkbox" class="baby" oninput="toggleBaby()">baby steps
 		</center>
 	</div>
 	<div class="grammar">
-		<p id="Grammar"><span id="6">Grammar &lt;- <span id="6"><span id="5">(<span id="1">Spacing</span> <span
-							id="3">(<span id="2">Definition</span>)+</span> <span id="4">EndOfFile</span>)</span> #
-					./PegOperators.lua:192()</span></span></p>
-		<p id="Definition"><span id="10">Definition &lt;- <span id="10">(<span id="7">Identifier</span> <span
-						id="8">LEFTARROW</span> <span id="9">Expression</span>)</span></span></p>
-		<p id="Expression"><span id="16">Expression &lt;- <span id="16">(<span id="11">Sequence</span> <span
-						id="15">(<span id="14">(<span id="12">SLASH</span> <span
-								id="13">Sequence</span>)</span>)*</span>)</span></span></p>
-		<p id="Sequence"><span id="18">Sequence &lt;- <span id="18">(<span id="17">Prefix</span>)*</span></span>
-		</p>
-		<p id="Prefix"><span id="24">Prefix &lt;- <span id="24">(<span id="22">(<span id="21">(<span id="19">AND</span>
-							/ <span id="20">NOT</span>)</span>)?</span> <span id="23">Suffix</span>)</span></span>
-		</p>
-		<p id="Suffix"><span id="31">Suffix &lt;- <span id="31">(<span id="25">Primary</span> <span id="30">(<span
-							id="29">(<span id="26">QUESTION</span> / <span id="27">STAR</span> /
-							<span id="28">PLUS</span>)</span>)?</span>)</span></span></p>
-		<p id="Primary"><span id="43">Primary &lt;- <span id="43">(<span id="35">(<span id="32">Identifier</span>
-						<span id="34">!(<span id="33">LEFTARROW</span>)</span>)</span> / <span id="39">(<span
-							id="36">OPEN</span> <span id="37">Expression</span> <span id="38">CLOSE</span>)</span> /
-					<span id="40">Literal</span> / <span id="41">Class</span> / <span id="42">DOT</span>)</span></span>
-		</p>
-		<p id="Identifier"><span id="49">Identifier &lt;- <span id="49"><span id="48">(<span id="44">IdentStart</span>
-						<span id="46">(<span id="45">IdentCont</span>)*</span> <span id="47">Spacing</span>)</span>
-					#
-					./PegGrammarFactory.lua:84()</span></span></p>
-		<p id="IdentStart"><span id="54">IdentStart &lt;- <span id="54"><span id="53">(<span id="50">[a-z]</span> /
-						<span id="51">[A-Z]</span> / <span id="52">[_]</span>)</span> #
-					./PegGrammarFactory.lua:49()</span></span></p>
-		<p id="IdentCont"><span id="58">IdentCont &lt;- <span id="58"><span id="57">(<span id="55">IdentStart</span>
-						/
-						<span id="56">[0-9]</span>)</span> # ./PegGrammarFactory.lua:49()</span></span></p>
-		<p id="Literal"><span id="78">Literal &lt;- <span id="78"><span id="77">(<span id="67">(<span
-								id="59">&quot;\&apos;&quot;</span> <span id="64">(<span id="63">(<span id="61">!(<span
-											id="60">&quot;\&apos;&quot;</span>)</span> <span
-										id="62">Char</span>)</span>)*</span> <span id="65">&quot;&quot;</span>
-							<span id="66">Spacing</span>)</span> / <span id="76">(<span
-								id="68">&quot;\&quot;&quot;</span>
-							<span id="73">(<span id="72">(<span id="70">!(<span
-											id="69">&quot;\&quot;&quot;</span>)</span> <span
-										id="71">Char</span>)</span>)*</span> <span id="74">&quot;\&quot;&quot;</span>
-							<span id="75">Spacing</span>)</span>)</span> #
-					./PegGrammarFactory.lua:101()</span></span>
-		</p>
-		<p id="Class"><span id="87">Class &lt;- <span id="87">(<span id="79">&quot;\[&quot;</span> <span id="84">(<span
-							id="83">(<span id="81">!(<span id="80">&quot;\]&quot;</span>)</span>
-							<span id="82">Range</span>)</span>)*</span> <span id="85">&quot;\]&quot;</span>
-					<span id="86">Spacing</span>)</span></span></p>
-		<p id="Range"><span id="93">Range &lt;- <span id="93">(<span id="91">(<span id="88">Char</span> <span
-							id="89">&quot;-&quot;</span> <span id="90">Char</span>)</span> / <span
-						id="92">Char</span>)</span></span></p>
-		<p id="Char"><span id="118">Char &lt;- <span id="118">(<span id="103">(<span id="94">&quot;\\\\&quot;</span>
-						<span id="102">(<span id="95">[n]</span> / <span id="96">[r]</span> / <span id="97">[t]</span> /
-							<span id="98">[\&apos;]</span> / <span id="99">[\&quot;]</span> / <span id="100">[\[]</span>
-							/ <span id="101">&quot;\]&quot;</span>)</span>)</span> / <span id="108">(<span
-							id="104">&quot;\\\\&quot;</span> <span id="105">[0-2]</span> <span id="106">[0-7]</span>
-						<span id="107">[0-7]</span>)</span> / <span id="113">(<span id="109">&quot;\\\\&quot;</span>
-						<span id="110">[0-7]</span> <span id="112">(<span id="111">[0-7]</span>)?</span>)</span>
-					/ <span id="117">(<span id="115">!(<span id="114">&quot;\\\\&quot;</span>)</span> <span
-							id="116">.</span>)</span>)</span></span></p>
-		<p id="LEFTARROW"><span id="121">LEFTARROW &lt;- <span id="121">(<span id="119">&quot;&lt;-&quot;</span>
-					<span id="120">Spacing</span>)</span></span></p>
-		<p id="SLASH"><span id="124">SLASH &lt;- <span id="124">(<span id="122">&quot;/&quot;</span> <span
-						id="123">Spacing</span>)</span></span></p>
-		<p id="AND"><span id="127">AND &lt;- <span id="127">(<span id="125">&quot;&amp;&quot;</span> <span
-						id="126">Spacing</span>)</span></span></p>
-		<p id="NOT"><span id="130">NOT &lt;- <span id="130">(<span id="128">&quot;!&quot;</span> <span
-						id="129">Spacing</span>)</span></span></p>
-		<p id="QUESTION"><span id="133">QUESTION &lt;- <span id="133">(<span id="131">&quot;?&quot;</span> <span
-						id="132">Spacing</span>)</span></span></p>
-		<p id="STAR"><span id="136">STAR &lt;- <span id="136">(<span id="134">&quot;*&quot;</span> <span
-						id="135">Spacing</span>)</span></span></p>
-		<p id="PLUS"><span id="139">PLUS &lt;- <span id="139">(<span id="137">&quot;+&quot;</span> <span
-						id="138">Spacing</span>)</span></span></p>
-		<p id="OPEN"><span id="142">OPEN &lt;- <span id="142">(<span id="140">&quot;(&quot;</span> <span
-						id="141">Spacing</span>)</span></span></p>
-		<p id="CLOSE"><span id="145">CLOSE &lt;- <span id="145">(<span id="143">&quot;)&quot;</span> <span
-						id="144">Spacing</span>)</span></span></p>
-		<p id="DOT"><span id="148">DOT &lt;- <span id="148">(<span id="146">&quot;.&quot;</span> <span
-						id="147">Spacing</span>)</span></span></p>
-		<p id="Spacing"><span id="152">Spacing &lt;- <span id="152">(<span id="151">(<span id="149">Space</span>
-						/ <span id="150">Comment</span>)</span>)*</span></span></p>
-		<p id="Comment"><span id="160">Comment &lt;- <span id="160">(<span id="153">&quot;#&quot;</span> <span
-						id="158">(<span id="157">(<span id="155">!(<span id="154">EndOfLine</span>)</span> <span
-								id="156">.</span>)</span>)*</span> <span id="159">EndOfLine</span>)</span></span>
-		</p>
-		<p id="Space"><span id="164">Space &lt;- <span id="164">(<span id="161">&quot; &quot;</span> / <span
-						id="162">&quot;\t&quot;</span> / <span id="163">EndOfLine</span>)</span></span></p>
-		<p id="EndOfLine"><span id="168">EndOfLine &lt;- <span id="168">(<span id="165">&quot;\r\n&quot;</span>
-					/ <span id="166">&quot;\n&quot;</span> / <span id="167">&quot;\r&quot;</span>)</span></span>
-		</p>
-		<p id="EndOfFile"><span id="170">EndOfFile &lt;- <span id="170">!(<span id="169">.</span>)</span></span>
-		</p>
 	</div>
 	<div class="stack">
 	</div>
@@ -322,6 +228,9 @@ EndOfFile  <- !.
 
 		function renderGui() {
 
+			for (let p of document.getElementsByTagName("p")) {
+				p.className = ""
+			}
 			for (let span of document.getElementsByTagName("span")) {
 				span.className = ""
 			}
@@ -333,7 +242,7 @@ EndOfFile  <- !.
 
 			let cmd = program[pc]
 
-			getCls("stack").innerHTML = ""
+			/*getCls("stack").innerHTML = ""
 			let br = ""
 			for (let op of babyStack) {
 				getId(op).className = "inStack"
@@ -344,36 +253,47 @@ EndOfFile  <- !.
 				else {
 					getCls("stack").innerHTML += types[op]
 				}
-			}
+			}*/
 
-			let op = Math.abs(cmd[0])
-			let entering = cmd[0] > 0
-			let pos = cmd[1]
-			let len = entering ? 0 : cmd[2]
+			let scrollTo
 
-			if (entering) {
-				getId(op).className = "entering"
-				markSource(pos, len, "entering")
+			if (!Array.isArray(cmd)) { // rule creation
+				let name = Object.keys(cmd)[0]
+				getId(name).parentElement.className = "update"
+				scrollTo = name
 			}
-			else if (len > -1) {
-				getId(op).className = "accept"
-				markSource(pos, len, "accept")
-			}
-			else {
-				getId(op).className = "reject"
-				markSource(pos, len, "reject")
+			else { // operator action
+				let op = cmd[0]
+				let entering = cmd.length === 2
+				let pos = cmd[1]
+				let match = entering ? 0 : cmd[2]
+
+				if (entering) {
+					getId(op).className = "entering"
+					markSource(pos, match, "entering")
+				}
+				else if (match > -1) {
+					getId(op).className = "accept"
+					markSource(pos, match, "accept")
+				}
+				else {
+					getId(op).className = "reject"
+					markSource(pos, match, "reject")
+				}
+				scrollTo = op
 			}
 
 			if (document.body.scrollIntoViewIfNeeded) {
-				getId(op).scrollIntoViewIfNeeded()
+				getId(scrollTo).scrollIntoViewIfNeeded()
 			}
 			else if (document.body.scrollIntoView) {
-				getId(op).scrollIntoView({
+				getId(scrollTo).scrollIntoView({
 					behavior: 'smooth',
 					block: 'nearest',
 					inline: 'nearest'
 				})
 			}
+
 		}
 
 		function step(direction = 1, render = true) {
@@ -391,23 +311,37 @@ EndOfFile  <- !.
 				}
 
 				let cmd = program[pc]
-				let op = Math.abs(cmd[0])
-				let entering = cmd[0] > 0
+				let op = cmd[0]
+				let entering = cmd.length === 2
+				let pos = cmd[1]
+				let match = entering ? 0 : cmd[2]
 
-				if (direction == 1 && entering || direction == -1 && !entering) {
-					if (rules.hasOwnProperty(op)) { ruleStack.push(op) }
-					babyStack.push(op)
+				if (!Array.isArray(cmd)) { // rule creation
+					let name = Object.keys(cmd)[0]
+					if (getId(name)) {
+						getId(name).innerHTML = cmd[name]
+					}
+					else {
+						getCls("grammar").innerHTML +=
+							'<p><span id="' + name + '">' + name
+							+ '</span> &lt;- ' + cmd[name] + '</p>'
+					}
 				}
-				else {
-					if (rules.hasOwnProperty(op)) { ruleStack.pop() }
-					babyStack.pop()
+				else { // operator action
+					if (direction == 1 && entering || direction == -1 && !entering) {
+						//if (rules.hasOwnProperty(op)) { ruleStack.push(op) }
+						babyStack.push(op)
+					}
+					else {
+						//if (rules.hasOwnProperty(op)) { ruleStack.pop() }
+						babyStack.pop()
+					}
 				}
-
 				if (direction == -1) {
 					pc--
 				}
 
-				if (babySteps || types[op] === '←' || types[op] === '@') {
+				if (babySteps/* || types[op] === '←' || types[op] === '@'*/) {
 					break
 				}
 			}
@@ -477,21 +411,12 @@ EndOfFile  <- !.
 
 		function stepBackOut() { skippingStep(-1, true) }
 
-
-
-		/*
-		<button onclick="stepBackOut()">↖</button>
-			<button onclick="stepBackIn()">↙</button>
-			<button onclick="stepBackOver()">↶</button>
-			<button onclick="playBack()">◀</button>
-			<button onclick="pause()">||</button>
-			<button onclick="play()">▶</button>
-			<button onclick="stepOver()">↷</button>
-			<button onclick="stepIn()">↘</button>
-			<button onclick="stepOut()">↗</button>
-*/
-		//
+		babySteps = true
+		while (!Array.isArray(program[pc])) {
+			step(1, false)
+		}
 		renderGui()
+		toggleBaby()
 
 	</script>
 </body>

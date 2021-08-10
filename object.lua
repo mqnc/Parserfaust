@@ -1,62 +1,46 @@
 local tag = require "tag"
 
-object = {}
-
-local TYPE = tag:derive("typeKey")
-local CALL = tag:derive("callKey")
-local ORDERING = tag:derive("orderingKey")
-local ORDER = tag:derive("orderKey")
-local CONSTS = tag:derive("constsKey")
+local object = {}
 
 object.RANDOM_ORDER = nil
-object.CHRONOLOGICAL_ORDER = tag:derive("chronoMarker")
-object.ALPHABETICAL_ORDER = tag:derive("alphaMarker")
+object.CHRONOLOGICAL_ORDER = 1
+object.ALPHABETICAL_ORDER = 2
 
 local objectMt = {
 
-    __call = function(t, ...)
-        return t[CALL](...)
-    end,
-
     __index = function(t, k)
-        return t[CONSTS][k]
+        return t.__consts[k]
     end,
 
     __newindex = function(t, k, v)
-        if t[CONSTS][k] ~= nil then
+        if t.__consts[k] ~= nil then
             error("attempt to overwrite constant member " .. k, 2)
         else
             rawset(t, k, v)
             if order == object.CHRONOLOGICAL_ORDER then
-                table.insert(t[ORDER], k)
+                table.insert(t.__order, k)
             end
         end
     end,
 
     __pairs = function(t)
-        if t[ORDERING] == object.ALPHABETICAL_ORDER --
-        or t[ORDERING] == object.CHRONOLOGICAL_ORDER then
+        if t.__ordering == object.ALPHABETICAL_ORDER --
+        or t.__ordering == object.CHRONOLOGICAL_ORDER then
 
             local keys
-            if t[ORDERING] == object.ALPHABETICAL_ORDER then
+            if t.__ordering == object.ALPHABETICAL_ORDER then
                 keys = {}
-                for k, _ in pairs(t[CONSTS]) do
-                    if not tag:includes(k) then
-                        table.insert(keys, k)
-                    end
+                for k, _ in pairs(t.__consts) do
+                    table.insert(keys, k)
                 end
-                local k, v
-                while true do
-                    k, v = next(obj, k)
-                    if k ~= nil then
-                        table.insert(keys, k)
-                    else
-                        break
-                    end
+                local k, _ = next(obj, k)
+				-- pairs() would call this function recursively
+                for k in next, t do
+                    table.insert(keys, k)
                 end
                 table.sort(keys)
             else
-                keys = t[ORDER]
+                keys = t.__order
             end
 
             local function iter(t, k)
@@ -82,20 +66,15 @@ local objectMt = {
             local function iter(t, k)
                 local v
                 -- iterate through const table
-                if k == nil or t[CONST][k] ~= nil then
-                    repeat
-                        k, v = next(t[CONST], k)
-                    until not tag:includes(k) or k == nil
+                if k == nil or t.__consts[k] ~= nil then
+                    k, v = next(t.__consts, k)
                     if k ~= nil then
                         return k, v
                     end
                 end
 
                 -- iterate through normal table
-                repeat
-                    k, v = next(t, k)
-                until not tag:includes(k) or k == nil
-                return k, v
+                return next(t, k)
             end
             return iter, t, nil
         end
@@ -109,20 +88,17 @@ function object.Object(typeTag, consts, ordering)
 
     local obj = {}
 
-    obj[TYPE] = typeTag
-    obj[CONSTS] = consts
-    obj[ORDERING] = ordering
-    obj[CALL] = function()
-        error("call is not defined for this object", 2)
-    end
+    obj.__type = typeTag
+    obj.__consts = consts
+    obj.__ordering = ordering
 
     if ordering == object.CHRONOLOGICAL_ORDER then
-        obj[ORDER] = {}
+        obj.__order = {}
         if consts then
             for k, _ in pairs(consts) do
-                table.insert(obj[ORDER], k)
+                table.insert(obj.__order, k)
             end
-            table.sort(obj[ORDER])
+            table.sort(obj.__order)
         end
     end
 
@@ -131,23 +107,7 @@ function object.Object(typeTag, consts, ordering)
     return obj
 end
 
-function object.setCall(obj, fn)
-    obj[CALL] = fn
-end
-
-function object.getCall(obj)
-    return obj[CALL]
-end
-
-function object.getType(obj)
-    if type(obj) == "table" then
-        return obj[TYPE]
-    else
-        return nil
-    end
-end
-
-object.nativeTypeTag = tag:derive("nativeTypeMarker")
+object.nativeTypeTag = tag:create("nativeTypeMarker")
 object["nil"] = object.nativeTypeTag:derive("nil")
 object.boolean = object.nativeTypeTag:derive("boolean")
 object.number = object.nativeTypeTag:derive("number")
@@ -156,6 +116,14 @@ object["function"] = object.nativeTypeTag:derive("function")
 object.userdata = object.nativeTypeTag:derive("userdata")
 object["thread"] = object.nativeTypeTag:derive("thread")
 object.table = object.nativeTypeTag:derive("table")
+
+function object.getType(obj)
+    if type(obj) == "table" and obj.__type ~= nil then
+        return obj.__type
+    else
+        return object[type(obj)]
+    end
+end
 
 local dispatcherMt = {
     __call = function(functor, arg, ...)
@@ -167,16 +135,16 @@ local dispatcherMt = {
             return functor[nativeTag](arg, ...)
 
         elseif nativeTag == object.table then
-            if arg[TYPE] ~= nil then
+            if arg.__type ~= nil then
                 -- table has a type field
-                local typeTag = arg[TYPE]
+                local typeTag = arg.__type
                 while functor[typeTag] == nil and typeTag ~= nil do
                     typeTag = typeTag.parent
                 end
                 if functor[typeTag] ~= nil then
                     return functor[typeTag](arg, ...)
                 else
-                    error("no overload defined for type tag " .. arg[TYPE].name, 2)
+                    error("no overload defined for type tag " .. arg.__type.label, 2)
                 end
             else
                 -- just a regular table

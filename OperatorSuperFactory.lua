@@ -1,106 +1,163 @@
 local tag = require "tag"
-require "object"
+local utils = require "utils"
+local object = require "object"
 local Object = object.Object
 
-local opf = {}
+local osf = {}
 
-opf.OpType = tag:derive("Op", {"parse"})
+osf.OpType = tag:create("Op", {"parse"})
 
-opf.LiteralType = opf.OpType:derive("Literal", {"str"})
-opf.RangeType = opf.OpType:derive("Range", {"from", "to"})
-opf.AnyType = opf.OpType:derive("Any")
+osf.LiteralType = osf.OpType:derive("Literal", {"str"})
+osf.RangeType = osf.OpType:derive("Range", {"from", "to"})
+osf.AnyType = osf.OpType:derive("Any")
 
-opf.RepetitionType = opf.OpType:derive("Repetition", {"min", "max"})
-opf.OptionalType = opf.RepetitionType:derive("Optional")
-opf.ZeroOrMoreType = opf.RepetitionType:derive("ZeroOrMore")
-opf.OneOrMoreType = opf.RepetitionType:derive("OneOrMore")
+osf.RepetitionType = osf.OpType:derive("Repetition", {"min", "max"})
+osf.OptionalType = osf.RepetitionType:derive("Optional")
+osf.ZeroOrMoreType = osf.RepetitionType:derive("ZeroOrMore")
+osf.OneOrMoreType = osf.RepetitionType:derive("OneOrMore")
 
-opf.LookAheadType = opf.OpType:derive("LookAhead", {"op", "posneg"})
-opf.AndType = opf.LookAheadType:derive("And")
-opf.NotType = opf.LookAheadType:derive("Not")
+osf.LookAheadType = osf.OpType:derive("LookAhead", {"op", "posneg"})
+osf.AndType = osf.LookAheadType:derive("And")
+osf.NotType = osf.LookAheadType:derive("Not")
 
-opf.SequenceType = opf.OpType:derive("Sequence", {"ops"})
-opf.ChoiceType = opf.OpType:derive("Choice", {"ops"})
-opf.ActionType = opf.OpType:derive("Action", {"op, action"})
-opf.ReferenceType = opf.OpType:derive("Reference", {"target", "env"})
+osf.SequenceType = osf.OpType:derive("Sequence", {"ops"})
+osf.ChoiceType = osf.OpType:derive("Choice", {"ops"})
+osf.ActionType = osf.OpType:derive("Action", {"op, action"})
 
-function opf.makeFactory()
+osf.GrammarType = osf.OpType:derive("Grammar", {"rules", "startRule"})
+osf.ReferenceType = osf.OpType:derive("Reference", {"grammar", "rule"})
+
+function osf.makeOperatorFactory(ruleDeco, opDeco, parseDeco)
+
+    if ruleDeco == nil then
+        ruleDeco = function(name, op)
+            return op
+        end
+    end
+
+    if opDeco == nil then
+        opDeco = function(op)
+            return op
+        end
+    end
+
+    if parseDeco == nil then
+        parseDeco = function(op, fn)
+            return fn
+        end
+    end
+
     return {
 
+        Grammar = function(startRule)
+            local self = Object(osf.GrammarType)
+            self.rules = {}
+            self.startRule = startRule
+            self.defRule = function(name, op)
+                self.rules[name] = ruleDeco(name, op)
+            end
+            self.parse = parseDeco(self, function(src, pos)
+                if pos == nil then
+                    pos = 1
+                end
+                return self.rules[self.startRule].parse(src, pos)
+            end)
+            return opDeco(self)
+        end,
+
+        Reference = function(grammar, rule)
+            local self = Object(osf.ReferenceType, {
+                grammar = grammar,
+                rule = rule
+            })
+            if rule == nil then
+                self.parse = parseDeco(self, function(src, pos)
+                    local len, tree = grammar.parse(src, pos)
+                    return len, {pos, len, op, tree}
+                end)
+            else
+                self.parse = parseDeco(self, function(src, pos)
+                    local len, tree = grammar.rules[rule].parse(src, pos)
+                    return len, {pos, len, op, tree}
+                end)
+            end
+            return opDeco(self)
+        end,
+
         Literal = function(str)
-            local self = Object(opf.LiteralType, {
+            local self = Object(osf.LiteralType, {
                 str = str
             })
             if str == "" then
-                self.parse = function()
+                self.parse = parseDeco(self, function()
                     return 0
-                end
+                end)
             else
-                self.parse = function(src, pos)
+                self.parse = parseDeco(self, function(src, pos)
                     if src:sub(pos, pos + #str - 1) == str then
                         return #str
                     else
                         return -1
                     end
-                end
+                end)
             end
-            return self
+            return opDeco(self)
         end,
 
         Range = function(from, to)
             if from ~= nil and to == nil then
                 to = from
             end
-            local self = Object(opf.RangeType, {
+            local self = Object(osf.RangeType, {
                 from = from,
                 to = to
             })
             if from == nil and to == nil then
-                self.parse = function()
+                self.parse = parseDeco(self, function()
                     return -1
-                end
+                end)
             else
-                self.parse = function(src, pos)
+                self.parse = parseDeco(self, function(src, pos)
                     local c = src:sub(pos, pos)
                     if from <= c and c <= to then
                         return 1
                     else
                         return -1
                     end
-                end
+                end)
             end
-            return self
+            return opDeco(self)
         end,
 
         Any = function()
-            local self = Object(opf.AnyType)
-            self.parse = function(src, pos)
+            local self = Object(osf.AnyType)
+            self.parse = parseDeco(self, function(src, pos)
                 if pos > #src then
                     return -1
                 else
                     return 1
                 end
-            end
-            return self
+            end)
+            return opDeco(self)
         end,
 
         Repetition = function(op, min, max)
             local opType
             if min == 0 and max == 1 then
-                opType = opf.OptionalType
+                opType = osf.OptionalType
             elseif min == 0 and max == math.huge then
-                opType = opf.ZeroOrMoreType
+                opType = osf.ZeroOrMoreType
             elseif min == 1 and max == math.huge then
-                opType = opf.OneOrMoreType
+                opType = osf.OneOrMoreType
             else
-                opType = opf.RepetitionType
+                opType = osf.RepetitionType
             end
             local self = Object(opType, {
                 op = op,
                 min = min,
                 max = max
             })
-            self.parse = function(src, pos)
+            self.parse = parseDeco(self, function(src, pos)
                 local totalLen = 0
                 local tree = {}
                 for i = 1, max do
@@ -123,38 +180,38 @@ function opf.makeFactory()
                     end
                 end
                 return totalLen, tree
-            end
-            return self
+            end)
+            return opDeco(self)
         end,
 
         LookAhead = function(op, posneg)
             local opType
             if posneg then
-                opType = opf.AndType
+                opType = osf.AndType
             else
-                opType = opf.NotType
+                opType = osf.NotType
             end
             local self = Object(opType, {
                 op = op,
                 posneg = posneg
             })
-            self.parse = function(src, pos)
+            self.parse = parseDeco(self, function(src, pos)
                 local len = op.parse(src, pos)
                 if (len ~= -1) == posneg then
                     return 0
                 else
                     return -1
                 end
-            end
-            return self
+            end)
+            return opDeco(self)
         end,
 
         Sequence = function(...)
             local ops = {...}
-            local self = Object(opf.SequenceType, {
+            local self = Object(osf.SequenceType, {
                 ops = ops
             })
-            self.parse = function(src, pos)
+            self.parse = parseDeco(self, function(src, pos)
                 local totalLen = 0
                 local tree = {}
 
@@ -174,16 +231,16 @@ function opf.makeFactory()
                     end
                 end
                 return totalLen, tree
-            end
-            return self
+            end)
+            return opDeco(self)
         end,
 
         Choice = function(...)
             local ops = {...}
-            local self = Object(opf.ChoiceType, {
+            local self = Object(osf.ChoiceType, {
                 ops = ops
             })
-            self.parse = function(src, pos)
+            self.parse = parseDeco(self, function(src, pos)
                 for i, op in ipairs(ops) do
                     local len, twig = op.parse(src, pos)
                     if len ~= -1 then
@@ -196,8 +253,8 @@ function opf.makeFactory()
                     end
                 end
                 return -1
-            end
-            return self
+            end)
+            return opDeco(self)
         end,
 
         Action = function(op, action)
@@ -206,35 +263,21 @@ function opf.makeFactory()
                     return {pos, len, op, tree}
                 end
             end
-            local self = Object(opf.ActionType, {
+            local self = Object(osf.ActionType, {
                 op = op,
                 action = action
             })
-            self.parse = function(src, pos)
+            self.parse = parseDeco(self, function(src, pos)
                 local len, tree = op.parse(src, pos)
                 if len ~= -1 then
                     return len, action(src, pos, len, tree)
                 else
                     return -1
                 end
-            end
-            return self
-        end,
-
-        Reference = function(target, env)
-            env = env or _G
-            local self = Object(opf.ReferenceType, {
-                target = target,
-                env = env
-            })
-            self.parse = function(src, pos)
-                local op = env[target]
-                local len, tree = op.parse(src, pos)
-                return len, {pos, len, op, tree}
-            end
-            return self
+            end)
+            return opDeco(self)
         end
     }
 end
 
-return opf
+return osf
