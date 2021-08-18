@@ -1,4 +1,4 @@
-let program=[{"Grammar":"<span id=\"1\">(<span id=\"2\">(<span id=\"3\">Spacing</span> <span id=\"4\">(<span id=\"5\">Definition</span>)+</span> <span id=\"6\">EndOfFile</span>)</span>) # {./OperatorSuperFactory.lua:205}<br>\n</span>"},
+let program=[{"Grammar":"<span id=\"1\">(<span id=\"2\">(<span id=\"3\">Spacing</span> <span id=\"4\">(<span id=\"5\">Definition</span>)+</span> <span id=\"6\">EndOfFile</span>)</span>) # {./operatorFactory.lua:205}<br>\n</span>"},
 {"Definition":"<span id=\"7\">(<span id=\"8\">Identifier</span> <span id=\"9\">LEFTARROW</span> <span id=\"10\">Expression</span>)</span>"},
 {"Expression":"<span id=\"11\">(<span id=\"12\">Sequence</span> <span id=\"13\">(<span id=\"14\">(<span id=\"15\">SLASH</span> <span id=\"16\">Sequence</span>)</span>)*</span>)</span>"},
 {"Sequence":"<span id=\"17\">(<span id=\"18\">Prefix</span>)*</span>"},

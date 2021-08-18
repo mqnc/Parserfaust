@@ -4,7 +4,7 @@ mt.__index = mt
 local IS_TAG = {}
 mt[IS_TAG] = true
 
-function mt:derive(label, newMembers)
+function mt:derive(label)
 
     local derived = {
         parent = self
@@ -13,21 +13,6 @@ function mt:derive(label, newMembers)
         derived.label = self.label .. "." .. label
     else
         derived.label = label
-    end
-    derived.members = {}
-
-    if self ~= nil and self.members ~= nil then
-        for _, m in ipairs(self.members) do
-            table.insert(derived.members, m)
-            derived.members[m] = true
-        end
-    end
-
-    if newMembers then
-        for _, m in ipairs(newMembers) do
-            table.insert(derived.members, m)
-            derived.members[m] = true
-        end
     end
 
     setmetatable(derived, mt)

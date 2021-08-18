@@ -116,6 +116,7 @@ object["function"] = object.nativeTypeTag:derive("function")
 object.userdata = object.nativeTypeTag:derive("userdata")
 object["thread"] = object.nativeTypeTag:derive("thread")
 object.table = object.nativeTypeTag:derive("table")
+object.any = object.nativeTypeTag:derive("any")
 
 function object.getType(obj)
     if type(obj) == "table" and obj.__type ~= nil then
@@ -143,7 +144,9 @@ local dispatcherMt = {
                 end
                 if functor[typeTag] ~= nil then
                     return functor[typeTag](arg, ...)
-                else
+				elseif functor[object.any] ~= nil then
+					return functor[object.any](arg, ...)
+				else
                     error("no overload defined for type tag " .. arg.__type.label, 2)
                 end
             else
@@ -152,6 +155,9 @@ local dispatcherMt = {
                     return functor[object.table](arg, ...)
                 end
             end
+
+		elseif functor[object.any] ~= nil then
+			return functor[object.any](arg, ...)
 
         else
             error("no overload defined for native type " .. type(arg), 2)

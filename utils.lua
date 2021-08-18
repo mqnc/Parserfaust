@@ -4,9 +4,9 @@ function utils.stringStream()
     local ss = {}
 
     ss.append = function(...)
-		for _, v in ipairs({...}) do
-			table.insert(ss, v)
-		end
+        for _, v in ipairs({...}) do
+            table.insert(ss, v)
+        end
     end
 
     ss.concat = function(filter, sep)
@@ -42,6 +42,27 @@ function utils.forward(...)
 end
 
 function utils.nop(...)
+end
+
+local proxyMt = {
+    __index = function(t, k)
+        return t.__raw[k]
+    end,
+    __newindex = function(t, k, v)
+        t.__raw[k] = v
+    end
+}
+function utils.proxyfy(raw, proxy)
+    proxy.__raw = raw
+    setmetatable(proxy, proxyMt)
+end
+
+function utils.copyTable(t)
+    local t2 = {}
+    for k, v in pairs(t) do
+        t2[k] = v
+    end
+    return t2
 end
 
 return utils

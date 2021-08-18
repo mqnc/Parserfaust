@@ -1,16 +1,18 @@
-local osf = require "OperatorSuperFactory"
+local opf = require "operatorFactory"
 local pgf = require "PegGrammarFactory"
 local inspect = (require "inspect").inspect
 local utils = require "utils"
 local object = require "object"
-local html = require "htmlLoggingGrammar"
+local html = require "htmlLogger"
+local str = require "PegStringify"
 
--- fillPegGrammar(grammar, operators)
+lopf = html(opf, str)
+parser = pgf(lopf)
 
 source = utils.readFile(arg[0]:gsub("test.lua", "peg.peg"))
 len, tree = parser.parse(source)
 
-html.print()
+print()
 
 -- print(grammar(source))
 

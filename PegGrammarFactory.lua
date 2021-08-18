@@ -1,15 +1,17 @@
 return function(operatorFactory)
 
-    local Grm = operatorFactory.Grammar
-    local Ref = operatorFactory.Reference
-    local Lit = operatorFactory.Literal
-    local Rng = operatorFactory.Range
-    local Any = operatorFactory.Any
-    local Seq = operatorFactory.Sequence
-    local Cho = operatorFactory.Choice
-    local Rep = operatorFactory.Repetition
-    local And = operatorFactory.LookAhead
-    local Act = operatorFactory.Action
+    local opf = operatorFactory
+
+    local Grm = opf[opf.Grammar]
+    local Ref = opf[opf.Reference]
+    local Lit = opf[opf.Literal]
+    local Rng = opf[opf.Range]
+    local Any = opf[opf.Any]
+    local Seq = opf[opf.Sequence]
+    local Cho = opf[opf.Choice]
+    local Rep = opf[opf.Repetition]
+    local And = opf[opf.LookAhead]
+    local Act = opf[opf.Action]
 
     local grammar = Grm("Grammar")
 
@@ -42,13 +44,13 @@ return function(operatorFactory)
     local Ignore = function()
     end
 
-	-- syntactic sugar for rule definitions
+    -- syntactic sugar for rule definitions
     local g = {
         __newindex = function(t, k, v)
             grammar.defRule(k, v)
         end
     }
-	setmetatable(g, g)
+    setmetatable(g, g)
 
     -- # Hierarchical syntax
 

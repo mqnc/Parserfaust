@@ -1,6 +1,6 @@
 local tag = require "tag"
 local object = require "object"
-local osf = require "OperatorSuperFactory"
+local operators = require "operatorFactory"
 
 local g = {}
 
@@ -11,7 +11,7 @@ function g.create()
 end
 
 function g.setStart(grammar, ruleName)
-    local start = osf.makeOperatorFactory().Reference(ruleName, grammar)
+    local start = operators.makeOperatorFactory().Reference(ruleName, grammar)
     object.setCall(grammar, function(src)
         return start(src, 1)
     end)
@@ -19,7 +19,7 @@ end
 
 g.decorate = object.Dispatcher()
 
-g.decorate[osf.OpType] = function(op, decorator)
+g.decorate[operators.OpType] = function(op, decorator)
     decorator(op)
     if op.op ~= nil then
         g.decorate(op.op, decorator)

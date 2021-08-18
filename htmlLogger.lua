@@ -1,27 +1,6 @@
-local object = require "object"
-local Object = object.Object
-local getType = object.getType
-local Grammar = require "Grammar"
-local stringifyInto = require "PegStringifier"
-local osf = require "OperatorSuperFactory"
+local opf = require "operatorFactory"
+local strfy = require "PegStringify"
 local utils = require "utils"
-
-local icon = {
-    [osf.GrammarType] = '🖹',
-    [osf.ReferenceType] = '@',
-    [osf.LiteralType] = '"',
-    [osf.RangeType] = '𝄩',
-    [osf.AnyType] = '.',
-    [osf.OptionalType] = '?',
-    [osf.ZeroOrMoreType] = '*',
-    [osf.OneOrMoreType] = '+',
-    [osf.RepetitionType] = '⟲',
-    [osf.AndType] = '&',
-    [osf.NotType] = '!',
-    [osf.SequenceType] = '⋯',
-    [osf.ChoiceType] = '/',
-    [osf.ActionType] = 'f'
-}
 
 local escapeJs = "[\b\f\n\r\t\v\0\'\"\\]"
 local escapeJsMap = {
@@ -47,38 +26,67 @@ local escapeHtmlMap = {
     ["'"] = "&apos;"
 }
 
-return function(operatorSuperFactory, stringifier)
+log = {
+    append = print
+}
+log.append = function()
+end
 
-	local operatorFactory = operatorSuperFactory(html.ruleDeco, html.opDeco, html.parseDeco)
+function sleep(n)
+    -- os.execute("sleep " .. tonumber(n))
+end
 
-    local log = utils.stringStream()
-
-    function html.ruleDeco(name, op)
-        log.append(name, " <- ")
-        stringifyInto(op, log)
-        return op
-    end
-
+return function(operatorFactory, stringifier)
     local id = 0
-    function html.opDeco(op)
-        id = id + 1
-        op.id = id
-        return op
-    end
 
-    function html.parseDeco(op, fn)
-        return function(src, pos)
-            -- log.append("[", op.id, ",", pos, "]")
-            local match = fn(src, pos)
-            -- log.append("[", op.id, ",", pos, ",", match, "]")
-            return match
+    local strfMt = {}
+
+    local opfMt = {
+        __index = function(t, k)
+
+            if operatorFactory.Op:includes(k) then
+                return function(...)
+
+                    local op = operatorFactory[k](...)
+
+                    local opProxy = {}
+
+                    opProxy.id = id
+                    id = id + 1
+
+                    opProxy.parse = function(src, pos)
+                        log.append("[", opProxy.id, ",", pos, "],")
+                        sleep(0.01)
+                        local match = op.parse(src, pos)
+                        log.append("[", opProxy.id, ",", pos, ",", match, "],")
+                        return match
+                    end
+
+                    opProxy.defRule = function(name, def)
+                        log.append("<", name, ">")
+                        op.defRule(name, def)
+                    end
+
+                    utils.proxyfy(op, opProxy)
+
+                    return opProxy
+
+                end
+            else
+                return operatorFactory[k]
+            end
+
+        end,
+
+        __newindex = function(t, k, v)
+            operatorFactory[k] = v
         end
-    end
+    }
 
-    function html.print()
-        print(table.concat(log))
-    end
+    local opFactoryProxy = {}
+    setmetatable(opFactoryProxy, opfMt)
 
+    return opFactoryProxy
 end
 --[[
 return function()
@@ -112,12 +120,12 @@ return function()
         local oldParse = op.parse
         local newParse = function(src, pos)
             table.insert(log, "[" .. op.id .. "," .. pos .. "]")
-            if T == osf.ReferenceType then
+            if T == operators.ReferenceType then
                 table.insert(log, --
                 "['" .. op.target .. "'," .. pos .. "]")
             end
             local len, tree = oldParse(src, pos)
-            if T == osf.ReferenceType then
+            if T == operators.ReferenceType then
                 table.insert(log, --
                 "['" .. op.target .. "'," .. pos .. "," .. len .. "]")
             end
@@ -133,7 +141,7 @@ return function()
 
     mt.__newindex = function(t, k, v)
         if type(k) == "string" --
-        and osf.OpType:includes(object.getType(v)) then
+        and operators.OpType:includes(object.getType(v)) then
             Grammar.decorate(v, deco)
             table.insert(log, '{"' .. k .. '":"' .. --
             stringify(v) --
@@ -147,9 +155,9 @@ return function()
         return "let program=[" .. table.concat(log, ",\n") .. "]"
     end
 
-    local proxy = {}
-    setmetatable(proxy, mt)
+    local opProxy = {}
+    setmetatable(opProxy, mt)
 
-    return proxy
+    return opProxy
 end
 ]]
