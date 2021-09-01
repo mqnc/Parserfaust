@@ -82,6 +82,10 @@
 			text-indent: -3em;
 		}
 
+		td {
+			vertical-align: top;
+		}
+
 		.inStack {
 			color: var(--in-stack-fg);
 			background-color: var(--in-stack-bg);
@@ -143,10 +147,10 @@ Literal    <- ['] (!['] Char)* ['] Spacing
             / ["] (!["] Char)* ["] Spacing
 Class      <- '[' (!']' Range)* ']' Spacing
 Range      <- Char '-' Char / Char
-Char       <- '\\' [nrt'"\[\]\\]
-            / '\\' [0-2][0-7][0-7]
-            / '\\' [0-7][0-7]?
-            / !'\\' .
+Char       <- '\\\\' [nrt'"\\[\\]\\\\]
+            / '\\\\' [0-2][0-7][0-7]
+            / '\\\\' [0-7][0-7]?
+            / !'\\\\' .
 
 LEFTARROW  <- '<-' Spacing
 SLASH      <- '/' Spacing
@@ -161,20 +165,37 @@ DOT        <- '.' Spacing
 
 Spacing    <- (Space / Comment)*
 Comment    <- '#' (!EndOfLine .)* EndOfLine
-Space      <- ' ' / '\t' / EndOfLine
-EndOfLine  <- '\r\n' / '\n' / '\r'
+Space      <- ' ' / '\\t' / EndOfLine
+EndOfLine  <- '\\r\\n' / '\\n' / '\\r'
 EndOfFile  <- !.
 `
+
+		let icons = {
+			Grammar: '🖹',
+			Reference: '@',
+			Literal: '"',
+			Range: '𝄩',
+			Any: '.',
+			Optional: '?',
+			ZeroOrMore: '*',
+			OneOrMore: '+',
+			And: '&',
+			Not: '!',
+			Sequence: '⁀',
+			Choice: '/',
+			Action: 'f'
+		}
+
 	</script>
 </head>
 
 <body>
 	<div class="header">
 		<center>
-			<button onclick="stepBackOut()">↖</button>
+			<!--<button onclick="stepBackOut()">↖</button>
 			<button onclick="stepBackIn()">↙</button>
 			<button onclick="stepBackOver()">↶</button>
-			<button onclick="playBack()">◀</button>
+			<button onclick="playBack()">◀</button>-->
 			<button onclick="pause()">||</button>
 			<button onclick="play()">▶</button>
 			<button onclick="stepOver()">↷</button>
@@ -205,7 +226,7 @@ EndOfFile  <- !.
 		getCls("source").innerHTML = source.replaceAll("\n", "<br>")
 
 		function markSource(from, len, style) {
-			if (from == -1) {
+			if (from === -1 || from === undefined) {
 				getCls("source").innerHTML = source.replaceAll("\n", "<br>")
 				return
 			}
@@ -220,6 +241,10 @@ EndOfFile  <- !.
 				).replaceAll("\n", "<br>")
 		}
 
+		function opType(id) {
+			return getId(id).dataset.type
+		}
+
 		let babySteps
 		function toggleBaby() {
 			babySteps = getCls("baby").checked
@@ -227,12 +252,10 @@ EndOfFile  <- !.
 		toggleBaby()
 
 		function renderGui() {
-
-			for (let p of document.getElementsByTagName("p")) {
-				p.className = ""
-			}
-			for (let span of document.getElementsByTagName("span")) {
-				span.className = ""
+			for (let cls of ["entering", "accept", "reject"]) {
+				for (let elem of document.getElementsByClassName(cls)) {
+					elem.className = ""
+				}
 			}
 
 			if (pc < 0) {
@@ -242,25 +265,23 @@ EndOfFile  <- !.
 
 			let cmd = program[pc]
 
-			/*getCls("stack").innerHTML = ""
+			getCls("stack").innerHTML = ""
 			let br = ""
 			for (let op of babyStack) {
 				getId(op).className = "inStack"
-				if (rules.hasOwnProperty(op)) {
-					getCls("stack").innerHTML += br + rules[op] + " "
+				if (opType(op)=="Rule") {
+					getCls("stack").innerHTML += br + op + " "
 					br = "<br>"
 				}
 				else {
-					getCls("stack").innerHTML += types[op]
+					getCls("stack").innerHTML += icons[opType(op)]
 				}
-			}*/
+			}
 
 			let scrollTo
 
-			if (!Array.isArray(cmd)) { // rule creation
-				let name = Object.keys(cmd)[0]
-				getId(name).parentElement.className = "update"
-				scrollTo = name
+			if (!Array.isArray(cmd)) { // grammar or rule creation
+
 			}
 			else { // operator action
 				let op = cmd[0]
@@ -316,24 +337,27 @@ EndOfFile  <- !.
 				let pos = cmd[1]
 				let match = entering ? 0 : cmd[2]
 
-				if (!Array.isArray(cmd)) { // rule creation
-					let name = Object.keys(cmd)[0]
-					if (getId(name)) {
-						getId(name).innerHTML = cmd[name]
-					}
-					else {
+				if (!Array.isArray(cmd)) { // grammar/rule creation
+					if ('grammar' in cmd) {
 						getCls("grammar").innerHTML +=
-							'<p><span id="' + name + '">' + name
-							+ '</span> &lt;- ' + cmd[name] + '</p>'
+							"<table id='" + cmd.grammar + "' data-type='Grammar'></table>"
+					}
+					else if ('rule' in cmd) {
+						getId(cmd.parent).innerHTML +=
+							"<tr><td><span id='" + cmd.rule
+							+ "' data-type='Rule'>"
+							+ cmd.rule + "</span></td>"
+							+ "<td> &lt;- </td>"
+							+ "<td>" + cmd.def + "</td></tr>"
 					}
 				}
 				else { // operator action
 					if (direction == 1 && entering || direction == -1 && !entering) {
-						//if (rules.hasOwnProperty(op)) { ruleStack.push(op) }
+						if (opType(op) === "Rule") { ruleStack.push(op) }
 						babyStack.push(op)
 					}
 					else {
-						//if (rules.hasOwnProperty(op)) { ruleStack.pop() }
+						if (opType(op) === "Rule") { ruleStack.pop() }
 						babyStack.pop()
 					}
 				}
@@ -341,7 +365,7 @@ EndOfFile  <- !.
 					pc--
 				}
 
-				if (babySteps/* || types[op] === '←' || types[op] === '@'*/) {
+				if (babySteps || opType(op) === "Reference" || opType(op) === "Rule") {
 					break
 				}
 			}

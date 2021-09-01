@@ -1,45 +1,73 @@
-local opf = require "operatorFactory"
-local strfy = require "PegStringify"
 local utils = require "utils"
+local object = require "object"
+local tag = require "tag"
 
-local escapeJs = "[\b\f\n\r\t\v\0\'\"\\]"
-local escapeJsMap = {
-    ["\b"] = "\\b",
-    ["\f"] = "\\f",
-    ["\n"] = "\\n",
-    ["\r"] = "\\r",
-    ["\t"] = "\\t",
-    ["\v"] = "\\v",
-    ["\0"] = "\\0",
-    ["\'"] = "\\\'",
-    ["\""] = "\\\"",
-    ["\\"] = "\\\\"
+local esc = tag:create("EscapeMarker")
+local js = esc:derive("BeginJsString")
+local html = esc:derive("BeginHtmlText")
+local over = esc:derive("EndOfEscape")
+
+local filter = {
+    [js] = function(txt)
+        return (txt:gsub("[\b\f\n\r\t\v\0\'\"\\]", {
+            ["\b"] = "\\b",
+            ["\f"] = "\\f",
+            ["\n"] = "\\n",
+            ["\r"] = "\\r",
+            ["\t"] = "\\t",
+            ["\v"] = "\\v",
+            ["\0"] = "\\0",
+            ["\'"] = "\\\'",
+            ["\""] = "\\\"",
+            ["\\"] = "\\\\"
+        }))
+    end,
+
+    [html] = function(txt)
+        return (txt:gsub("[\n%&%<%>%\"%\']", {
+            ["\n"] = "<br>\n",
+            ["&"] = "&amp;",
+            ["<"] = "&lt;",
+            [">"] = "&gt;",
+            ['"'] = "&quot;",
+            ["'"] = "&apos;"
+        }))
+    end
 }
-
-local escapeHtml = "[\n%&%<%>%\"%\']"
-local escapeHtmlMap = {
-    ["\n"] = "<br>\n",
-    ["&"] = "&amp;",
-    ["<"] = "&lt;",
-    [">"] = "&gt;",
-    ['"'] = "&quot;",
-    ["'"] = "&apos;"
-}
-
-log = {
-    append = print
-}
-log.append = function()
-end
-
-function sleep(n)
-    -- os.execute("sleep " .. tonumber(n))
-end
 
 return function(operatorFactory, stringifier)
     local id = 0
+    local buffer = {}
+    local output
 
-    local strfMt = {}
+    local currentFilter = utils.forward
+    local previousFilters = {}
+
+    output = function(...)
+        for _, v in ipairs({...}) do
+            local T = object.getType(v)
+            if operatorFactory.Grammar:includes(T) then
+                output("{grammar:'", v.name, "'},")
+            elseif operatorFactory.Op:includes(T) then
+                output(over, "<span id='", v.id, --
+                "' data-type='", T.label:gsub("[^%.]*%.",""), "'>", html)
+                stringifier[T](v, output)
+                output(over, "</span>", html)
+            elseif esc:includes(v) then
+                if v == js or v == html then
+                    local previousFilter = currentFilter
+                    table.insert(previousFilters, previousFilter)
+                    currentFilter = function(txt)
+                        return filter[v](previousFilter(txt))
+                    end
+                elseif v == over then
+                    currentFilter = table.remove(previousFilters)
+                end
+            elseif type(v) == "string" or type(v) == "number" then
+                table.insert(buffer, currentFilter(tostring(v)))
+            end
+        end
+    end
 
     local opfMt = {
         __index = function(t, k)
@@ -54,17 +82,56 @@ return function(operatorFactory, stringifier)
                     opProxy.id = id
                     id = id + 1
 
+                    local isRef = operatorFactory.Reference:includes(k)
+                    local isGrm = operatorFactory.Grammar:includes(k)
+
                     opProxy.parse = function(src, pos)
-                        log.append("[", opProxy.id, ",", pos, "],")
-                        sleep(0.01)
+                        local p = pos
+                        if p == nil then
+                            p = 1
+                        end
+
+                        if isGrm then
+                            output("['", op.name, "',", p, "],")
+                            output("['", op.startRule, "',", p, "],")
+                        else
+                            output("[", opProxy.id, ",", p, "],")
+                            if isRef then
+                                output("['", op.rule, "',", p, "],")
+                            end
+                        end
+
                         local match = op.parse(src, pos)
-                        log.append("[", opProxy.id, ",", pos, ",", match, "],")
+
+                        if isGrm then
+                            output("['", op.startRule, "',", p, ",", match, "],")
+                            output("['", op.name, "',", p, ",", match, "],")
+                        else
+                            if isRef then
+                                output("['", op.rule, "',", p, ",", match, "],")
+                            end
+                            output("[", opProxy.id, ",", p, ",", match, "],")
+                        end
+
                         return match
                     end
 
-                    opProxy.defRule = function(name, def)
-                        log.append("<", name, ">")
-                        op.defRule(name, def)
+                    if operatorFactory.Grammar:includes(k) then
+                        opProxy.rules = {}
+                        setmetatable(opProxy.rules, {
+                            __index = op.rules,
+                            __newindex = function(_, name, def)
+                                stringifier.rule(name, def, --
+                                function(name, arrow, def, br)
+                                    output("{rule:'", name, --
+                                    "', parent:'", op.name, --
+                                    "', def:'", js, html, def, --
+                                    over, over, "'},")
+                                end)
+                                op.rules[name] = def
+                            end
+                        })
+                        output(op)
                     end
 
                     utils.proxyfy(op, opProxy)
@@ -86,78 +153,9 @@ return function(operatorFactory, stringifier)
     local opFactoryProxy = {}
     setmetatable(opFactoryProxy, opfMt)
 
-    return opFactoryProxy
+    local function getLog()
+        return "let program=[" .. table.concat(buffer) .. "]"
+    end
+
+    return opFactoryProxy, getLog
 end
---[[
-return function()
-
-    local id = 0
-    local log = {}
-
-    local grammar = Grammar.create()
-
-    local stringify = Stringifier()
-
-    for typeTag, original in pairs(stringify) do
-        if typeTag ~= Grammar.type and typeTag ~= object.string then
-            stringify[typeTag] = function(op)
-                return "\01" .. op.id .. "\02" .. original(op) .. "\03"
-            end
-        end
-    end
-
-    local mt = {}
-
-    local function deco(op)
-        local T = getType(op)
-        if op.id ~= nil then
-            return
-        end
-        id = id + 1
-        op.id = id
-        op.icon = icon[T]
-
-        local oldParse = op.parse
-        local newParse = function(src, pos)
-            table.insert(log, "[" .. op.id .. "," .. pos .. "]")
-            if T == operators.ReferenceType then
-                table.insert(log, --
-                "['" .. op.target .. "'," .. pos .. "]")
-            end
-            local len, tree = oldParse(src, pos)
-            if T == operators.ReferenceType then
-                table.insert(log, --
-                "['" .. op.target .. "'," .. pos .. "," .. len .. "]")
-            end
-            table.insert(log, "[" .. op.id .. "," .. pos .. "," .. len .. "]")
-            return len, tree
-        end
-        op.parse = newParse
-    end
-
-    mt.__index = function(t, rule)
-        return grammar[rule]
-    end
-
-    mt.__newindex = function(t, k, v)
-        if type(k) == "string" --
-        and operators.OpType:includes(object.getType(v)) then
-            Grammar.decorate(v, deco)
-            table.insert(log, '{"' .. k .. '":"' .. --
-            stringify(v) --
-            :gsub(escapeHtml, escapeHtmlMap) --
-            :gsub(escapeJs, escapeJsMap) .. '"}')
-        end
-        rawset(t, k, v)
-    end
-
-    mt.__tostring = function()
-        return "let program=[" .. table.concat(log, ",\n") .. "]"
-    end
-
-    local opProxy = {}
-    setmetatable(opProxy, mt)
-
-    return opProxy
-end
-]]

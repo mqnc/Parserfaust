@@ -25,13 +25,10 @@ opf.Sequence = opf.Op:derive("Sequence")
 opf.Choice = opf.Op:derive("Choice")
 opf.Action = opf.Op:derive("Action")
 
-opf[opf.Grammar] = function(startRule)
-    local self = Object(opf.Grammar)
+opf[opf.Grammar] = function(name, startRule)
+    local self = Object(opf.Grammar, {name=name})
     self.rules = {}
     self.startRule = startRule
-    self.defRule = function(name, op)
-        self.rules[name] = op
-    end
     self.parse = function(src, pos)
         if pos == nil then
             pos = 1

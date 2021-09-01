@@ -47,9 +47,13 @@ strfy.escape = function(txt)
     return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]\\])", pegEscapeMap))
 end
 
+strfy.rule = function(name, op, outputFn)
+    outputFn(name, " <- ", op, "\n")
+end
+
 strfy[opf.Grammar] = function(op, outputFn)
     for name, def in pairs(op.rules) do
-        outputFn(rule, " <- ", def, "\n")
+        strfy.rule(name, def, outputFn)
     end
 end
 
