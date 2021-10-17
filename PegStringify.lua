@@ -43,9 +43,17 @@ for d2 = 0, 3 do
     end
 end
 
-strfy.escape = function(txt)
-    return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
+if type(jit) == 'table' then
+	-- we are running in luajit which doesn't support \0 in a string
+	strfy.escape = function(txt)
+		return (txt:gsub("([\1-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
+	end
+else
+	strfy.escape = function(txt)
+		return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
+	end
 end
+
 
 strfy.rule = function(name, op, outputFn)
     outputFn(name, " <- ", op, "\n")
