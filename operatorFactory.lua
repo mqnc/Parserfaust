@@ -25,10 +25,11 @@ opf.Sequence = opf.Op:derive("Sequence")
 opf.Choice = opf.Op:derive("Choice")
 opf.Action = opf.Op:derive("Action")
 
-opf[opf.Grammar] = function(name, startRule)
-    local self = Object(opf.Grammar, {name=name})
+opf[opf.Grammar] = function(startRule)
+    local self = Object(opf.Grammar, {
+        startRule = startRule
+    })
     self.rules = {}
-    self.startRule = startRule
     self.parse = function(src, pos)
         if pos == nil then
             pos = 1
@@ -44,15 +45,18 @@ opf[opf.Reference] = function(grammar, rule)
         rule = rule
     })
     if rule == nil then
-        self.parse = function(src, pos)
-            local len, tree = grammar.parse(src, pos)
-            return len, {pos, len, op, tree}
+        self.getTarget = function()
+            return grammar
         end
-    else
-        self.parse = function(src, pos)
-            local len, tree = grammar.rules[rule].parse(src, pos)
-            return len, {pos, len, op, tree}
+    elseif type(rule) == "string" then
+        self.getTarget = function()
+            return grammar.rules[rule]
         end
+    end
+    self.parse = function(src, pos)
+        local op = self.getTarget()
+        local len, tree = op.parse(src, pos)
+        return len, {pos, len, op, tree}
     end
     return self
 end

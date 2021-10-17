@@ -47,12 +47,15 @@ return function(operatorFactory, stringifier)
         for _, v in ipairs({...}) do
             local T = object.getType(v)
             if operatorFactory.Grammar:includes(T) then
-                output("{grammar:'", v.name, "'},")
+                output(over, "<span data-type='GrammarRef' ", --
+                "data-target='op", v.id, "'></span>", html)
             elseif operatorFactory.Op:includes(T) then
-                output(over, "<span id='", v.id, --
-                "' data-type='", T.label:gsub("[^%.]*%.",""), "'>", html)
+                output(over, "<span id='op", v.id, --
+                "' data-type='", T.label:gsub("[^%.]*%.", ""), "'>")
+                output(html)
                 stringifier[T](v, output)
-                output(over, "</span>", html)
+                output(over)
+                output("</span>", html)
             elseif esc:includes(v) then
                 if v == js or v == html then
                     local previousFilter = currentFilter
@@ -90,48 +93,33 @@ return function(operatorFactory, stringifier)
                         if p == nil then
                             p = 1
                         end
-
-                        if isGrm then
-                            output("['", op.name, "',", p, "],")
-                            output("['", op.startRule, "',", p, "],")
-                        else
-                            output("[", opProxy.id, ",", p, "],")
-                            if isRef then
-                                output("['", op.rule, "',", p, "],")
-                            end
-                        end
-
+                        output("[", opProxy.id, ",", p, "],")
                         local match = op.parse(src, pos)
-
-                        if isGrm then
-                            output("['", op.startRule, "',", p, ",", match, "],")
-                            output("['", op.name, "',", p, ",", match, "],")
-                        else
-                            if isRef then
-                                output("['", op.rule, "',", p, ",", match, "],")
-                            end
-                            output("[", opProxy.id, ",", p, ",", match, "],")
-                        end
-
+                        output(match, ",")
                         return match
                     end
 
-                    if operatorFactory.Grammar:includes(k) then
+                    if isGrm then
                         opProxy.rules = {}
                         setmetatable(opProxy.rules, {
                             __index = op.rules,
                             __newindex = function(_, name, def)
                                 stringifier.rule(name, def, --
                                 function(name, arrow, def, br)
-                                    output("{rule:'", name, --
-                                    "', parent:'", op.name, --
-                                    "', def:'", js, html, def, --
-                                    over, over, "'},")
+                                    output("{type:'Rule', id:'@op", def.id, --
+									"', name:'", name, "', html:'", js, --
+                                    "<tr><td><span id='@op", def.id, --
+                                    "' data-type='Rule'>", --
+                                    name, "</span></td><td> &lt;- </td>", --
+                                    "<td>", html, def, over, "</td></tr>", --
+                                    over, "', parent:'op", opProxy.id, "'},")
                                 end)
                                 op.rules[name] = def
                             end
                         })
-                        output(op)
+                        output("{type:'Grammar', id:'op", opProxy.id, --
+						"', html:'", js, "<table id='op", opProxy.id, --
+                        "' data-type='Grammar'></table>", over, "'},")
                     end
 
                     utils.proxyfy(op, opProxy)
@@ -154,7 +142,7 @@ return function(operatorFactory, stringifier)
     setmetatable(opFactoryProxy, opfMt)
 
     local function getLog()
-        return "let program=[" .. table.concat(buffer) .. "]"
+        return "let packedProgram=[" .. table.concat(buffer) .. "]"
     end
 
     return opFactoryProxy, getLog

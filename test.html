@@ -17,7 +17,7 @@
 			--reject-bg: #ff570f;
 			--not-in-stack-fg: #444444;
 			--in-stack-fg: black;
-			--in-stack-bg: rgba(200, 100, 255, 0.2);
+			--in-stack-bg: rgba(85, 153, 255, 0.14);
 		}
 
 		body {
@@ -86,17 +86,17 @@
 			vertical-align: top;
 		}
 
-		.inStack {
+		span.inStack {
 			color: var(--in-stack-fg);
 			background-color: var(--in-stack-bg);
 		}
 
-		.entering {
+		.enter {
 			color: var(--enter-fg);
 			background-color: var(--enter-bg);
 		}
 
-		.entering0 {
+		.enter0 {
 			background: linear-gradient(90deg, var(--enter-bg) 0%, var(--editor-bg) 70%);
 		}
 
@@ -181,7 +181,7 @@ EndOfFile  <- !.
 			OneOrMore: '+',
 			And: '&',
 			Not: '!',
-			Sequence: '⁀',
+			Sequence: 'ⵈ',
 			Choice: '/',
 			Action: 'f'
 		}
@@ -192,10 +192,10 @@ EndOfFile  <- !.
 <body>
 	<div class="header">
 		<center>
-			<!--<button onclick="stepBackOut()">↖</button>
+			<button onclick="stepBackOut()">↖</button>
 			<button onclick="stepBackIn()">↙</button>
 			<button onclick="stepBackOver()">↶</button>
-			<button onclick="playBack()">◀</button>-->
+			<button onclick="playBack()">◀</button>
 			<button onclick="pause()">||</button>
 			<button onclick="play()">▶</button>
 			<button onclick="stepOver()">↷</button>
@@ -219,9 +219,94 @@ EndOfFile  <- !.
 		let getId = document.getElementById.bind(document)
 		let getCls = c => document.getElementsByClassName(c)[0]
 
-		let ruleStack = []
-		let babyStack = []
+		function unpackProgram(packed) {
+			let program = []
+			let stack = []
+			let activeRules = {}
+
+			function injectRule(cmd) {
+				// inject extra step for marking the rule
+				rule = { ...cmd }
+				rule.op = "@" + cmd.op
+				rule.name = activeRules[rule.op].name
+				rule.isRuleLabel = true
+				program.push(rule)
+			}
+
+			for (let packedCmd of packed) {
+				let cmd = {}
+				if (Array.isArray(packedCmd)) { // enter rule
+					cmd.type = "enter"
+					cmd.op = "op" + packedCmd[0]
+					cmd.pos = packedCmd[1]
+					stack.push(cmd)
+					if ("@" + cmd.op in activeRules) {
+						injectRule(cmd)
+					}
+					program.push(cmd)
+				}
+
+				else if (typeof (packedCmd) == "number") { // accept/reject rule
+					cmd.type = packedCmd == -1 ? "reject" : "accept"
+					cmd.match = packedCmd
+					cmd.entered = stack.pop()
+					cmd.op = cmd.entered.op
+					program.push(cmd)
+					if ("@" + cmd.op in activeRules) {
+						injectRule(cmd)
+					}
+				}
+				else if (packedCmd.type == "Rule") { // create rule
+					cmd = { ...packedCmd }
+					if (cmd.id in activeRules) {
+						cmd.replaces = activeRules[cmd.id]
+					}
+					activeRules[cmd.id] = cmd
+					program.push(cmd)
+				}
+				else {
+					cmd = { ...packedCmd }
+					program.push(cmd)
+				}
+			}
+
+			for (let i = 0; i < program.length; i++) {
+				if (program[i].isRuleLabel) {
+					program[i].bigStep = true
+					if (program[i].type == "enter") {
+						if (i > 0) {
+							program[i - 1].bigStep = true
+						}
+					}
+					else {
+						if (i < program.length - 1) {
+							program[i + 1].bigStep = true
+						}
+					}
+				}
+				if (program[i].type == "Rule"
+					&& i < program.length - 1
+					&& program[i + 1].type != "Rule"
+				) {
+					program[i].bigStep = true
+				}
+			}
+
+			return program
+		}
+
+		let program = unpackProgram(packedProgram)
+		let stack = []
+		let popPending = false
 		let pc = -1
+
+		/*
+		let annotatedSource=[]
+		for (c of source){
+			annotatedSource.push(["<",c,">"])
+		}
+		//console.log(annotatedSource.flat().join(""))
+		*/
 
 		getCls("source").innerHTML = source.replaceAll("\n", "<br>")
 
@@ -241,6 +326,22 @@ EndOfFile  <- !.
 				).replaceAll("\n", "<br>")
 		}
 
+		function scrollTo(id) {
+			let elem = getId(id)
+			if (elem) {
+				if (document.body.scrollIntoViewIfNeeded) {
+					elem.scrollIntoViewIfNeeded()
+				}
+				else if (document.body.scrollIntoView) {
+					elem.scrollIntoView({
+						behavior: 'smooth',
+						block: 'nearest',
+						inline: 'nearest'
+					})
+				}
+			}
+		}
+
 		function opType(id) {
 			return getId(id).dataset.type
 		}
@@ -252,7 +353,7 @@ EndOfFile  <- !.
 		toggleBaby()
 
 		function renderGui() {
-			for (let cls of ["entering", "accept", "reject"]) {
+			for (let cls of ["enter", "accept", "reject"]) {
 				for (let elem of document.getElementsByClassName(cls)) {
 					elem.className = ""
 				}
@@ -267,58 +368,40 @@ EndOfFile  <- !.
 
 			getCls("stack").innerHTML = ""
 			let br = ""
-			for (let op of babyStack) {
-				getId(op).className = "inStack"
-				if (opType(op)=="Rule") {
-					getCls("stack").innerHTML += br + op + " "
+			for (let cmd of stack) {
+				getId(cmd.op).className = "inStack"
+				if (opType(cmd.op) == "Rule") {
+					getCls("stack").innerHTML += br + cmd.name + " "
 					br = "<br>"
 				}
 				else {
-					getCls("stack").innerHTML += icons[opType(op)]
+					getCls("stack").innerHTML += icons[opType(cmd.op)]
 				}
 			}
 
-			let scrollTo
+			if (cmd.type == "enter"
+				|| cmd.type == "accept"
+				|| cmd.type == "reject") {
 
-			if (!Array.isArray(cmd)) { // grammar or rule creation
-
-			}
-			else { // operator action
-				let op = cmd[0]
-				let entering = cmd.length === 2
-				let pos = cmd[1]
-				let match = entering ? 0 : cmd[2]
-
-				if (entering) {
-					getId(op).className = "entering"
-					markSource(pos, match, "entering")
-				}
-				else if (match > -1) {
-					getId(op).className = "accept"
-					markSource(pos, match, "accept")
+				getId(cmd.op).className = cmd.type
+				if (cmd.type == "enter") {
+					markSource(cmd.pos, 0, cmd.type)
 				}
 				else {
-					getId(op).className = "reject"
-					markSource(pos, match, "reject")
+					markSource(cmd.entered.pos, cmd.match, cmd.type)
 				}
-				scrollTo = op
-			}
-
-			if (document.body.scrollIntoViewIfNeeded) {
-				getId(scrollTo).scrollIntoViewIfNeeded()
-			}
-			else if (document.body.scrollIntoView) {
-				getId(scrollTo).scrollIntoView({
-					behavior: 'smooth',
-					block: 'nearest',
-					inline: 'nearest'
-				})
+				scrollTo(cmd.op)
 			}
 
 		}
 
 		function step(direction = 1, render = true) {
 			while (true) {
+				if (popPending) {
+					stack.pop()
+					popPending = false
+				}
+
 				if (direction == 1) {
 					if (pc >= program.length - 1) {
 						return false
@@ -332,40 +415,27 @@ EndOfFile  <- !.
 				}
 
 				let cmd = program[pc]
-				let op = cmd[0]
-				let entering = cmd.length === 2
-				let pos = cmd[1]
-				let match = entering ? 0 : cmd[2]
 
-				if (!Array.isArray(cmd)) { // grammar/rule creation
-					if ('grammar' in cmd) {
-						getCls("grammar").innerHTML +=
-							"<table id='" + cmd.grammar + "' data-type='Grammar'></table>"
-					}
-					else if ('rule' in cmd) {
-						getId(cmd.parent).innerHTML +=
-							"<tr><td><span id='" + cmd.rule
-							+ "' data-type='Rule'>"
-							+ cmd.rule + "</span></td>"
-							+ "<td> &lt;- </td>"
-							+ "<td>" + cmd.def + "</td></tr>"
-					}
+				if (cmd.type == "Grammar") {
+					getCls("grammar").innerHTML += cmd.html
+				}
+				else if (cmd.type == "Rule") {
+					getId(cmd.parent).innerHTML += cmd.html
 				}
 				else { // operator action
-					if (direction == 1 && entering || direction == -1 && !entering) {
-						if (opType(op) === "Rule") { ruleStack.push(op) }
-						babyStack.push(op)
+					if (direction == 1 && cmd.type == "enter"
+						|| direction == -1 && cmd.type != "enter") {
+						stack.push(cmd)
 					}
 					else {
-						if (opType(op) === "Rule") { ruleStack.pop() }
-						babyStack.pop()
+						popPending = true
 					}
 				}
 				if (direction == -1) {
 					pc--
 				}
 
-				if (babySteps || opType(op) === "Reference" || opType(op) === "Rule") {
+				if (babySteps || cmd.bigStep) {
 					break
 				}
 			}
@@ -413,13 +483,13 @@ EndOfFile  <- !.
 		function stepBackIn() { step(-1) }
 
 		function skippingStep(direction = 1, out = false) {
-			let stack = babySteps ? babyStack : ruleStack
 			let startStackSize = stack.length
 			while (true) {
 				let cont = step(direction, false)
-				if (!cont
-					|| !out && stack.length <= startStackSize
-					|| out && stack.length < startStackSize
+				if (
+					!cont
+					|| !out && (stack.length <= startStackSize)
+					|| out && (stack.length < startStackSize)
 				) {
 					break
 				}
@@ -436,9 +506,7 @@ EndOfFile  <- !.
 		function stepBackOut() { skippingStep(-1, true) }
 
 		babySteps = true
-		while (!Array.isArray(program[pc])) {
-			step(1, false)
-		}
+
 		renderGui()
 		toggleBaby()
 

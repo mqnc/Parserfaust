@@ -13,7 +13,7 @@ return function(operatorFactory)
     local And = opf[opf.LookAhead]
     local Act = opf[opf.Action]
 
-    local grammar = Grm("PEG", "Grammar")
+    local grammar = Grm("Grammar")
 
     -- curry grammar into references
     local R = function(name)
@@ -44,39 +44,39 @@ return function(operatorFactory)
     local Ignore = function()
     end
 
-    r = grammar.rules
+    local g = grammar.rules
 
     -- # Hierarchical syntax
 
     -- Grammar <- Spacing Definition+ EndOfFile
-    r.Grammar = Act(Seq(R("Spacing"), Oom(R("Definition")), R("EndOfFile")))
+    g.Grammar = Act(Seq(R("Spacing"), Oom(R("Definition")), R("EndOfFile")))
 
     -- Definition <- Identifier LEFTARROW Expression
-    r.Definition = Seq(R("Identifier"), R("LEFTARROW"), R("Expression"))
+    g.Definition = Seq(R("Identifier"), R("LEFTARROW"), R("Expression"))
 
     -- Expression <- Sequence (SLASH Sequence)*
-    r.Expression = Seq(R("Sequence"), Zom(Seq(R("SLASH"), R("Sequence"))))
+    g.Expression = Seq(R("Sequence"), Zom(Seq(R("SLASH"), R("Sequence"))))
 
     -- Sequence <- Prefix*
-    r.Sequence = Zom(R("Prefix"))
+    g.Sequence = Zom(R("Prefix"))
 
     -- Prefix <- (AND / NOT)? Suffix
-    r.Prefix = Seq(Opt(Cho(R("AND"), R("NOT"))), R("Suffix"))
+    g.Prefix = Seq(Opt(Cho(R("AND"), R("NOT"))), R("Suffix"))
 
     -- Suffix <- Primary (QUESTION / STAR / PLUS)?
-    r.Suffix = Seq(R("Primary"), Opt(Cho(R("QUESTION"), R("STAR"), R("PLUS"))))
+    g.Suffix = Seq(R("Primary"), Opt(Cho(R("QUESTION"), R("STAR"), R("PLUS"))))
 
     -- Primary <- Identifier !LEFTARROW
     --          / OPEN Expression CLOSE
     --          / Literal / Class / DOT
-    r.Primary = Cho(Seq(R("Identifier"), Not(R("LEFTARROW"))), --
+    g.Primary = Cho(Seq(R("Identifier"), Not(R("LEFTARROW"))), --
     Seq(R("OPEN"), R("Expression"), R("CLOSE")), --
     R("Literal"), R("Class"), R("DOT"))
 
     -- # Lexical syntax
 
     -- Identifier <- IdentStart IdentCont* Spacing
-    r.Identifier = Act(Seq(R("IdentStart"), Zom(R("IdentCont")), R("Spacing")), Ignore)
+    g.Identifier = Act(Seq(R("IdentStart"), Zom(R("IdentCont")), R("Spacing")), Ignore)
     --[[function(src, pos, len, tree)
         return {
             -- pos + tree[1].len (=1) + tree[2].len -1
@@ -85,14 +85,14 @@ return function(operatorFactory)
     end)]]
 
     -- IdentStart <- [a-zA-Z_]
-    r.IdentStart = Act(Cho(Rng("a", "z"), Rng("A", "Z"), Rng("_")), Ignore)
+    g.IdentStart = Act(Cho(Rng("a", "z"), Rng("A", "Z"), Rng("_")), Ignore)
 
     -- IdentCont <- IdentStart / [0-9]
-    r.IdentCont = Act(Cho(R("IdentStart"), Rng("0", "9")), Ignore)
+    g.IdentCont = Act(Cho(R("IdentStart"), Rng("0", "9")), Ignore)
 
     -- Literal <- ['] (!['] Char)* ['] Spacing
     --          / ["] (!["] Char)* ["] Spacing
-    r.Literal = Act(Cho(Seq(Rng("'"), Zom(Seq(Not(Rng("'")), R("Char"))), Rng("'"), R("Spacing")), --
+    g.Literal = Act(Cho(Seq(Rng("'"), Zom(Seq(Not(Rng("'")), R("Char"))), Rng("'"), R("Spacing")), --
     Seq(Rng('"'), Zom(Seq(Not(Rng('"')), R("Char"))), Rng('"'), R("Spacing"))), --
     function(src, pos, len, tree)
         -- print(src:sub(pos, pos + len))
@@ -101,65 +101,65 @@ return function(operatorFactory)
     end)
 
     -- Class <- '[' (!']' Range)* ']' Spacing
-    r.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), R("Range"))), Lit("]"), R("Spacing"))
+    g.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), R("Range"))), Lit("]"), R("Spacing"))
 
     -- Range <- Char '-' Char / Char
-    r.Range = Cho(Seq(R("Char"), Lit("-"), R("Char")), R("Char"))
+    g.Range = Cho(Seq(R("Char"), Lit("-"), R("Char")), R("Char"))
 
     -- Char <- '\\' [nrt'"\[\]\\]
     --       / '\\' [0-3][0-7][0-7]
     --       / '\\' [0-7][0-7]?
     --       / !'\\' .
     -- # (original paper says [0-2][0-7][0-7] but I think it's a typo)
-    r.Char = Cho(Seq(Lit("\\\\"), Cho(Rng("n"), Rng("r"), Rng("t"), Rng("'"), Rng('"'), Rng("["), Rng("]"))), --
+    g.Char = Cho(Seq(Lit("\\\\"), Cho(Rng("n"), Rng("r"), Rng("t"), Rng("'"), Rng('"'), Rng("["), Rng("]"))), --
     Seq(Lit("\\\\"), Rng("0", "3"), Rng("0", "7"), Rng("0", "7")), --
     Seq(Lit("\\\\"), Rng("0", "7"), Opt(Rng("0", "7"))), --
     Seq(Not(Lit("\\\\")), Any()))
 
     -- LEFTARROW <- '<-' Spacing
-    r.LEFTARROW = Seq(Lit("<-"), R("Spacing"))
+    g.LEFTARROW = Seq(Lit("<-"), R("Spacing"))
 
     -- SLASH <- '/' Spacing
-    r.SLASH = Seq(Lit("/"), R("Spacing"))
+    g.SLASH = Seq(Lit("/"), R("Spacing"))
 
     -- AND <- '&' Spacing
-    r.AND = Seq(Lit("&"), R("Spacing"))
+    g.AND = Seq(Lit("&"), R("Spacing"))
 
     -- NOT <- '!' Spacing
-    r.NOT = Seq(Lit("!"), R("Spacing"))
+    g.NOT = Seq(Lit("!"), R("Spacing"))
 
     -- QUESTION <- '?' Spacing
-    r.QUESTION = Seq(Lit("?"), R("Spacing"))
+    g.QUESTION = Seq(Lit("?"), R("Spacing"))
 
     -- STAR <- '*' Spacing
-    r.STAR = Seq(Lit("*"), R("Spacing"))
+    g.STAR = Seq(Lit("*"), R("Spacing"))
 
     -- PLUS <- '+' Spacing
-    r.PLUS = Seq(Lit("+"), R("Spacing"))
+    g.PLUS = Seq(Lit("+"), R("Spacing"))
 
     -- OPEN <- '(' Spacing
-    r.OPEN = Seq(Lit("("), R("Spacing"))
+    g.OPEN = Seq(Lit("("), R("Spacing"))
 
     -- CLOSE <- ')' Spacing
-    r.CLOSE = Seq(Lit(")"), R("Spacing"))
+    g.CLOSE = Seq(Lit(")"), R("Spacing"))
 
     -- DOT <- '.' Spacing
-    r.DOT = Seq(Lit("."), R("Spacing"))
+    g.DOT = Seq(Lit("."), R("Spacing"))
 
     -- Spacing <- (Space / Comment)*
-    r.Spacing = Zom(Cho(R("Space"), R("Comment")))
+    g.Spacing = Zom(Cho(R("Space"), R("Comment")))
 
     -- Comment <- '#' (!EndOfLine .)* EndOfLine
-    r.Comment = Seq(Lit("#"), Zom(Seq(Not(R("EndOfLine")), Any())), R("EndOfLine"))
+    g.Comment = Seq(Lit("#"), Zom(Seq(Not(R("EndOfLine")), Any())), R("EndOfLine"))
 
     -- Space <- ' ' / '\t' / EndOfLine
-    r.Space = Cho(Lit(" "), Lit("\t"), R("EndOfLine"))
+    g.Space = Cho(Lit(" "), Lit("\t"), R("EndOfLine"))
 
     -- EndOfLine <- '\r\n' / '\n' / '\r'
-    r.EndOfLine = Cho(Lit("\r\n"), Lit("\n"), Lit("\r"))
+    g.EndOfLine = Cho(Lit("\r\n"), Lit("\n"), Lit("\r"))
 
     -- EndOfFile <- !.
-    r.EndOfFile = Not(Any())
+    g.EndOfFile = Not(Any())
 
     return grammar
 end
