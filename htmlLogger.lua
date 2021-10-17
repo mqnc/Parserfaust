@@ -107,7 +107,7 @@ return function(operatorFactory, stringifier)
                                 stringifier.rule(name, def, --
                                 function(name, arrow, def, br)
                                     output("{type:'Rule', id:'@op", def.id, --
-									"', name:'", name, "', html:'", js, --
+                                    "', name:'", name, "', html:'", js, --
                                     "<tr><td><span id='@op", def.id, --
                                     "' data-type='Rule'>", --
                                     name, "</span></td><td> &lt;- </td>", --
@@ -118,7 +118,7 @@ return function(operatorFactory, stringifier)
                             end
                         })
                         output("{type:'Grammar', id:'op", opProxy.id, --
-						"', html:'", js, "<table id='op", opProxy.id, --
+                        "', html:'", js, "<table id='op", opProxy.id, --
                         "' data-type='Grammar'></table>", over, "'},")
                     end
 

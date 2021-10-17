@@ -16,7 +16,6 @@
 			--reject-fg: black;
 			--reject-bg: #ff570f;
 			--not-in-stack-fg: #444444;
-			--in-stack-fg: black;
 			--in-stack-bg: rgba(85, 153, 255, 0.14);
 		}
 
@@ -87,7 +86,6 @@
 		}
 
 		span.inStack {
-			color: var(--in-stack-fg);
 			background-color: var(--in-stack-bg);
 		}
 
@@ -105,7 +103,7 @@
 			background-color: var(--accept-bg);
 		}
 
-		.match0 {
+		.accept0 {
 			background: linear-gradient(90deg, var(--accept-bg) 0%, var(--editor-bg) 70%);
 		}
 
@@ -209,7 +207,7 @@ EndOfFile  <- !.
 	</div>
 	<div class="stack">
 	</div>
-	<div class="source">
+	<div class="source" style="white-space: break-spaces;">
 	</div>
 	<div class="footer">
 		status

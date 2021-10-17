@@ -111,10 +111,10 @@ return function(operatorFactory)
     --       / '\\' [0-7][0-7]?
     --       / !'\\' .
     -- # (original paper says [0-2][0-7][0-7] but I think it's a typo)
-    g.Char = Cho(Seq(Lit("\\\\"), Cho(Rng("n"), Rng("r"), Rng("t"), Rng("'"), Rng('"'), Rng("["), Rng("]"))), --
-    Seq(Lit("\\\\"), Rng("0", "3"), Rng("0", "7"), Rng("0", "7")), --
-    Seq(Lit("\\\\"), Rng("0", "7"), Opt(Rng("0", "7"))), --
-    Seq(Not(Lit("\\\\")), Any()))
+    g.Char = Cho(Seq(Lit("\\"), Cho(Rng("n"), Rng("r"), Rng("t"), Rng("'"), Rng('"'), Rng("["), Rng("]"), Rng("\\"))), --
+    Seq(Lit("\\"), Rng("0", "3"), Rng("0", "7"), Rng("0", "7")), --
+    Seq(Lit("\\"), Rng("0", "7"), Opt(Rng("0", "7"))), --
+    Seq(Not(Lit("\\")), Any()))
 
     -- LEFTARROW <- '<-' Spacing
     g.LEFTARROW = Seq(Lit("<-"), R("Spacing"))

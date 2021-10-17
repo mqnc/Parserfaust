@@ -44,7 +44,7 @@ for d2 = 0, 3 do
 end
 
 strfy.escape = function(txt)
-    return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]\\])", pegEscapeMap))
+    return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
 end
 
 strfy.rule = function(name, op, outputFn)
