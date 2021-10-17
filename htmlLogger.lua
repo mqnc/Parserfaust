@@ -7,14 +7,9 @@ local js = esc:derive("BeginJsString")
 local html = esc:derive("BeginHtmlText")
 local over = esc:derive("EndOfEscape")
 
-local NULifnJit = "\0"
-if type(jit) == 'table' then
-    NULifnJit = ""
-end
-
 local filter = {
     [js] = function(txt)
-        return (txt:gsub("[\b\f\n\r\t\v" .. NULifnJit .. "\'\"\\]", {
+        return (txt:gsub("[\b\f\n\r\t\v%z\'\"\\]", {
             ["\b"] = "\\b",
             ["\f"] = "\\f",
             ["\n"] = "\\n",
