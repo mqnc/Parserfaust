@@ -9,7 +9,7 @@ local str = require "PegStringify"
 lopf, get = html(opf, str)
 parser = pgf(lopf)
 
-source = utils.readFile(arg[0]:gsub("test.lua", "peg.peg"))
+source = utils.readFile(arg[0]:gsub("test.lua", "grammar.peg"))
 
 len, tree = parser.parse(source)
 
