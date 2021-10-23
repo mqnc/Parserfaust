@@ -61,6 +61,19 @@ opf[opf.Reference] = function(grammar, rule)
 	return self
 end
 
+opf.makeGrammarHelper = function(grammar)
+	local helper = {
+		__index = function(t, k)
+			return opf[opf.Reference](grammar, k)
+		end,
+		__newindex = function(t, k, v)
+			grammar.rules[k] = v
+		end
+	}
+	setmetatable(helper, helper)
+	return helper
+end
+
 opf[opf.Literal] = function(str)
 	local self = Object(opf.Literal, {
 		str = str
