@@ -25,6 +25,8 @@ opf.Sequence = opf.Op:derive("Sequence")
 opf.Choice = opf.Op:derive("Choice")
 opf.Action = opf.Op:derive("Action")
 
+opf.Fail = tag:create("Fail")
+
 opf[opf.Grammar] = function(startRule)
 	local self = Object(opf.Grammar, {
 		startRule = startRule
@@ -54,9 +56,7 @@ opf[opf.Reference] = function(grammar, rule)
 		end
 	end
 	self.parse = function(src, pos)
-		local op = self.getTarget()
-		local len, tree = op.parse(src, pos)
-		return len, {pos, len, op, tree}
+		return self.getTarget().parse(src, pos)
 	end
 	return self
 end
@@ -84,11 +84,10 @@ opf[opf.Literal] = function(str)
 		end
 	else
 		self.parse = function(src, pos)
-			local snippet = src:sub(pos, pos + #str - 1)
-			if snippet == str then
-				return #str, snippet
+			if src:sub(pos, pos + #str - 1) == str then
+				return #str
 			else
-				return -1
+				return opf.Fail
 			end
 		end
 	end
@@ -105,15 +104,15 @@ opf[opf.Range] = function(from, to)
 	})
 	if from == nil and to == nil then
 		self.parse = function()
-			return -1
+			return opf.Fail
 		end
 	else
 		self.parse = function(src, pos)
 			local c = src:sub(pos, pos)
 			if from <= c and c <= to then
-				return 1, c
+				return 1
 			else
-				return -1
+				return opf.Fail
 			end
 		end
 	end
@@ -124,9 +123,9 @@ opf[opf.Any] = function()
 	local self = Object(opf.Any)
 	self.parse = function(src, pos)
 		if pos > #src then
-			return -1
+			return opf.Fail
 		else
-			return 1, src:sub(pos, pos)
+			return 1
 		end
 	end
 	return self
@@ -154,19 +153,14 @@ opf[opf.Repetition] = function(op, min, max)
 		for i = 1, max do
 			local start = pos + totalLen
 			local len, twig = op.parse(src, start)
-			if len == -1 then
+			if len == opf.Fail then
 				if i > min then
 					return totalLen, tree
 				else
-					return -1
+					return opf.Fail
 				end
 			else
-				table.insert(tree, {
-					pos = start,
-					len = len,
-					op = op,
-					tree = twig
-				})
+				table.insert(tree, twig)
 				totalLen = totalLen + len
 			end
 		end
@@ -188,10 +182,10 @@ opf[opf.LookAhead] = function(op, posneg)
 	})
 	self.parse = function(src, pos)
 		local len = op.parse(src, pos)
-		if (len ~= -1) == posneg then
+		if (len ~= opf.Fail) == posneg then
 			return 0
 		else
-			return -1
+			return opf.Fail
 		end
 	end
 	return self
@@ -209,15 +203,10 @@ opf[opf.Sequence] = function(...)
 		for i, op in ipairs(ops) do
 			local start = pos + totalLen
 			local len, twig = op.parse(src, start)
-			if len == -1 then
-				return -1
+			if len == opf.Fail then
+				return opf.Fail
 			else
-				table.insert(tree, {
-					pos = start,
-					len = len,
-					op = op,
-					tree = twig
-				})
+				table.insert(tree, twig)
 				totalLen = totalLen + len
 			end
 		end
@@ -234,31 +223,29 @@ opf[opf.Choice] = function(...)
 	self.parse = function(src, pos)
 		for i, op in ipairs(ops) do
 			local len, twig = op.parse(src, pos)
-			if len ~= -1 then
+			if len ~= opf.Fail then
 				return len, {
-					pos = pos,
-					len = len,
-					op = op,
-					tree = twig
+					[i] = twig
 				}
 			end
 		end
-		return -1
+		return opf.Fail
 	end
 	return self
 end
 
 opf[opf.Action] = function(op, action)
+	assert(action ~= nil)
 	local self = Object(opf.Action, {
 		op = op,
 		action = action
 	})
 	self.parse = function(src, pos)
-		local len, tree = op.parse(src, pos)
-		if len < 0 then
-			return -1
+		local len, twig = op.parse(src, pos)
+		if len == opf.Fail then
+			return opf.Fail
 		else
-			return len, action(src, pos, len, tree)
+			return len, action(src, pos, len, twig)
 		end
 	end
 	return self

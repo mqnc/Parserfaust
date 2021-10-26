@@ -36,12 +36,26 @@ return function(operatorFactory)
 		return And(op, false)
 	end
 
-	-- often used semantic actions
-	local Ignore = function()
+	-- forwarding choice, ignoring index
+	local fCho = function(...)
+		return Act(Cho(...), function(src, pos, len, twig)
+			local index, value = next(twig)
+			return index
+		end)
 	end
 
-	local Forward = function(src, pos, len, tree)
-		return tree
+	-- just forward matched string
+	local Match = function(op)
+		return Act(op, function(src, pos, len, twig)
+			return src:sub(pos, pos + len)
+		end)
+	end
+
+	-- pick an item from a sequence
+	local Pick = function(index, seq)
+		return Act(seq, function(src, pos, len, twig)
+			return twig[index]
+		end)
 	end
 
 	local g = opf.makeGrammarHelper(grammar)
@@ -76,12 +90,7 @@ return function(operatorFactory)
 	-- # Lexical syntax
 
 	-- Identifier <- IdentStart IdentCont* Spacing
-	g.Identifier = Act(Seq(g.IdentStart, Zom(g.IdentCont), g.Spacing), --
-	function(src, pos, len, tree)
-		return {
-			id = src:sub(pos, pos + tree[2].len)
-		}
-	end)
+	g.Identifier = Pick(1, Seq(Match(Seq(g.IdentStart, Zom(g.IdentCont))), g.Spacing))
 
 	-- IdentStart <- [a-zA-Z_]
 	g.IdentStart = Cho(Rng("a", "z"), Rng("A", "Z"), Rng("_"))
@@ -91,57 +100,61 @@ return function(operatorFactory)
 
 	-- Literal <- ['] (!['] Char)* ['] Spacing
 	--          / ["] (!["] Char)* ["] Spacing
-	g.Literal = Act(Cho( --
-	Seq(Rng("'"), Zom(Seq(Not(Rng("'")), g.Char)), Rng("'"), g.Spacing), --
-	Seq(Rng('"'), Zom(Seq(Not(Rng('"')), g.Char)), Rng('"'), g.Spacing) --
-	), --
-	function(src, pos, len, tree)
-		return {}
-	end)
+	g.Literal = fCho( --
+	Pick(2, Seq(Rng("'"), Zom(Seq(Not(Rng("'")), g.Char)), Rng("'"), g.Spacing)), --
+	Pick(2, Seq(Rng('"'), Zom(Seq(Not(Rng('"')), g.Char)), Rng('"'), g.Spacing)) --
+	)
 
 	-- Class <- '[' (!']' Range)* ']' Spacing
-	g.Class = Seq(Lit("["), Zom(Seq(Not(Lit("]")), g.Range)), Lit("]"), g.Spacing)
+	g.Class = Act(Seq(Lit("["), --
+	Zom(Pick(2, Seq(Not(Lit("]")), g.Range))), --
+	Lit("]"), g.Spacing), --
+	function(src, pos, len, twig)
+		local ranges=twig[2]
+		return Cho(table.unpack(ranges))
+	end)
 
 	-- Range <- Char '-' Char / Char
-	g.Range = Cho(Seq(g.Char, Lit("-"), g.Char), g.Char)
+	g.Range = Act(Cho(Seq(g.Char, Lit("-"), g.Char), g.Char), --
+	function(src, pos, len, twig)
+		local choice, vals = next(twig)
+		if choice == 1 then
+			return Rng(vals[1], vals[3])
+		else
+			return Rng(vals[1])
+		end
+	end)
 
 	-- Char <- '\\' [nrt'"\[\]\\]
 	--       / '\\' [0-3][0-7][0-7]
 	--       / '\\' [0-7][0-7]?
 	--       / !'\\' .
 	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo)
-	g.Char = Act(Cho(g.Escape, g.Octal, g.SimpleChar), --
-	function(src, pos, len, tree)
-		print(tree.tree[4])
-		return tree
-	end)
+	g.Char = fCho(g.Escape, g.Octal, g.SimpleChar)
 	g.Escape = Act(Seq(Lit("\\"), Cho( --
 	Rng("n"), Rng("r"), Rng("t"), Rng("'"), --
 	Rng('"'), Rng("["), Rng("]"), Rng("\\"))), --
-	function(src, pos, len, tree)
+	function(src, pos, len, twig)
+		local c = src:sub(pos + 1, pos + 1)
 		local map = {
 			n = "\n",
 			r = "\r",
-			t = "\t",
-			["'"] = "'",
-			['"'] = '"',
-			["["] = "[",
-			["]"] = "]",
-			["\\"] = "\\"
+			t = "\t"
 		}
-		return map[src:sub(pos + 1, pos + 1)]
+		if map[c] then
+			return map[c]
+		else
+			return car
+		end
 	end)
 	g.Octal = Act(Cho( --
 	Seq(Lit("\\"), Rng("0", "3"), Rng("0", "7"), Rng("0", "7")), --
 	Seq(Lit("\\"), Rng("0", "7"), Opt(Rng("0", "7"))) --
 	), --
-	function(src, pos, len, tree)
+	function(src, pos, len, twig)
 		return string.char(tonumber(src:sub(pos + 1, pos + len - 1), 8))
 	end)
-	g.SimpleChar = Act(Seq(Not(Lit("\\")), Any()), --
-	function(src, pos, len, tree)
-		return src:sub(pos, pos)
-	end)
+	g.SimpleChar = Match(Seq(Not(Lit("\\")), Any()))
 
 	-- LEFTARROW <- '<-' Spacing
 	g.LEFTARROW = Seq(Lit("<-"), g.Spacing)
