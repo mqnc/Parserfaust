@@ -1,6 +1,8 @@
 local utils = require "utils"
 local object = require "object"
 local tag = require "tag"
+local inspect = (require "inspect").inspect
+
 
 local esc = tag:create("EscapeMarker")
 local js = esc:derive("BeginJsString")
@@ -79,6 +81,7 @@ return function(operatorFactory, stringifier)
 				return function(...)
 
 					local op = operatorFactory[k](...)
+					op.id=id
 
 					local opProxy = {}
 
@@ -88,12 +91,18 @@ return function(operatorFactory, stringifier)
 					local isRef = operatorFactory.Reference:includes(k)
 					local isGrm = operatorFactory.Grammar:includes(k)
 
-					opProxy.parse = function(src, pos)
+					opProxy.parse = function(src, pos, ctx)
 						local p = pos
-						if p == nil then p = 1 end
+						if p == nil then
+							p = 1
+						end
 						output("[", opProxy.id, ",", p, "],")
-						local result = {op.parse(src, pos)}
-						output(result[1], ",")
+						local result = {op.parse(src, pos, ctx)}
+						if result[1] == operatorFactory.Fail then
+							output("F,")
+						else
+							output(result[1], ",")
+						end
 						return table.unpack(result)
 					end
 
@@ -113,6 +122,9 @@ return function(operatorFactory, stringifier)
 									over, "', parent:'op", opProxy.id, "'},")
 								end)
 								op.rules[name] = def
+							end,
+							__pairs = function(_)
+								return pairs(op.rules)
 							end
 						})
 						output("{type:'Grammar', id:'op", opProxy.id, --
@@ -131,14 +143,17 @@ return function(operatorFactory, stringifier)
 
 		end,
 
-		__newindex = function(t, k, v) operatorFactory[k] = v end
+		__newindex = function(t, k, v)
+			operatorFactory[k] = v
+		end
 	}
 
 	local opFactoryProxy = {}
 	setmetatable(opFactoryProxy, opfMt)
 
 	local function getLog()
-		return "let packedProgram=[" .. table.concat(buffer) .. "]"
+		return "let F = Symbol('fail')\n" --
+		.. "let packedProgram=[" .. table.concat(buffer) .. "]"
 	end
 
 	return opFactoryProxy, getLog

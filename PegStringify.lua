@@ -43,17 +43,44 @@ for d2 = 0, 3 do
 	end
 end
 
-strfy.escape = function(txt)
-	return (txt:gsub("([%z-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
+strfy.defaultOutputFn = function(...)
+	for _, v in ipairs({...}) do
+		local T = object.getType(v)
+		if opf.Op:includes(T) then
+			strfy[T](v, strfy.defaultOutputFn)
+		elseif type(v) == "string" or type(v) == "number" then
+			print(v)
+		end
+	end
 end
 
-strfy.rule = function(name, op, outputFn) outputFn(name, " <- ", op, "\n") end
+setmetatable(strfy, {
+	__call = function(_, op, outputFn)
+		if outputFn == nil then
+			outputFn = strfy.defaultOutputFn
+		end
+		outputFn(op)
+	end
+})
+
+strfy.escape = function(txt)
+	return (txt:gsub("([%z-\31\127-\255%\'%\"%[%]%\\])",
+			pegEscapeMap))
+end
+
+strfy.rule = function(name, op, outputFn)
+	outputFn(name, " <- ", op, "\n")
+end
 
 strfy[opf.Grammar] = function(op, outputFn)
-	for name, def in pairs(op.rules) do strfy.rule(name, def, outputFn) end
+	for name, def in pairs(op.rules) do
+		strfy.rule(name, def, outputFn)
+	end
 end
 
-strfy[opf.Reference] = function(op, outputFn) outputFn(op.rule) end
+strfy[opf.Reference] = function(op, outputFn)
+	outputFn(op.rule)
+end
 
 strfy[opf.Literal] = function(op, outputFn)
 	outputFn('"', strfy.escape(op.str), '"')
@@ -63,22 +90,38 @@ strfy[opf.Range] = function(op, outputFn)
 	local from = op.from
 	local to = op.to
 	outputFn('[')
-	if from ~= nil then outputFn(strfy.escape(from)) end
-	if from ~= to then outputFn('-', strfy.escape(to)) end
+	if from ~= nil then
+		outputFn(strfy.escape(from))
+	end
+	if from ~= to then
+		outputFn('-', strfy.escape(to))
+	end
 	outputFn(']')
 end
 
-strfy[opf.Any] = function(op, outputFn) outputFn('.') end
+strfy[opf.Any] = function(op, outputFn)
+	outputFn('.')
+end
 
-strfy[opf.Optional] = function(op, outputFn) outputFn('(', op.op, ')?') end
+strfy[opf.Optional] = function(op, outputFn)
+	outputFn('(', op.op, ')?')
+end
 
-strfy[opf.ZeroOrMore] = function(op, outputFn) outputFn('(', op.op, ')*') end
+strfy[opf.ZeroOrMore] = function(op, outputFn)
+	outputFn('(', op.op, ')*')
+end
 
-strfy[opf.OneOrMore] = function(op, outputFn) outputFn('(', op.op, ')+') end
+strfy[opf.OneOrMore] = function(op, outputFn)
+	outputFn('(', op.op, ')+')
+end
 
-strfy[opf.And] = function(op, outputFn) outputFn('&(', op.op, ')') end
+strfy[opf.And] = function(op, outputFn)
+	outputFn('&(', op.op, ')')
+end
 
-strfy[opf.Not] = function(op, outputFn) outputFn('!(', op.op, ')') end
+strfy[opf.Not] = function(op, outputFn)
+	outputFn('!(', op.op, ')')
+end
 
 strfy[opf.Sequence] = function(op, outputFn)
 	outputFn('(')

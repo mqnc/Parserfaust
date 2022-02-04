@@ -245,7 +245,7 @@ EndOfFile  <- !.
 				}
 
 				else if (typeof (packedCmd) == "number") { // accept/reject rule
-					cmd.type = packedCmd == -1 ? "reject" : "accept"
+					cmd.type = packedCmd == F ? "reject" : "accept"
 					cmd.match = packedCmd
 					cmd.entered = stack.pop()
 					cmd.op = cmd.entered.op
@@ -259,6 +259,7 @@ EndOfFile  <- !.
 					if (cmd.id in activeRules) {
 						cmd.replaces = activeRules[cmd.id]
 					}
+					console.log(cmd)
 					activeRules[cmd.id] = cmd
 					program.push(cmd)
 				}
