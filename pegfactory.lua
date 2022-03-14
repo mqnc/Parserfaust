@@ -1,22 +1,18 @@
 local inspect = (require "inspect").inspect
+local opf = require "opfactory"
 
-return function(operatorFactory)
+return function()
 
-	local opf = operatorFactory
-
-	local Ref = opf[opf.Reference]
-	local Grm = opf[opf.Grammar]
-	local Lit = opf[opf.Literal]
-	local Rng = opf[opf.Range]
-	local Any = opf[opf.Any]
-	local Seq = opf[opf.Sequence]
-	local Cho = opf[opf.Choice]
-	local Rep = opf[opf.Repetition]
-	local And = opf[opf.LookAhead]
-	local Act = opf[opf.Action]
-
-	local pegGrammar = Grm("Grammar")
-	local builtGrammar = Grm("Start")
+	local Ref = opf.makeReference
+	local Lit = opf.makeLiteral
+	local Rng = opf.makeRange
+	local Any = opf.makeAny
+	local Seq = opf.makeSequence
+	local Cho = opf.makeChoice
+	local Rep = opf.makeRepetition
+	local And = opf.makeLookAhead
+	local Ctx = opf.makeContext
+	local Act = opf.makeAction
 
 	-- zero or more
 	local Zom = function(op)
@@ -38,11 +34,11 @@ return function(operatorFactory)
 		return And(op, false)
 	end
 
-	-- forwarding choice, ignoring index
+	-- forward chosen, ignoring index
 	local fCho = function(...)
 		return Act(Cho(...), function(args)
 			local index, value = next(args.vals)
-			return index
+			return value
 		end)
 	end
 
@@ -67,47 +63,57 @@ return function(operatorFactory)
 		end)
 	end
 
+	local pegRules = {}
+
 	-- grammar construction helper
-	local g = {
+	local g = {}
+	setmetatable(g, {
 		__index = function(t, k)
-			return Ref(k, pegGrammar)
+			return Ref(pegRules, k)
 		end,
 		__newindex = function(t, k, v)
-			pegGrammar.rules[k] = v
+			pegRules[k] = v
 		end
-	}
-	setmetatable(g, g)
+	})
 
 	-- # Hierarchical syntax
 
 	-- Grammar <- Spacing Definition+ EndOfFile
-	g.Grammar = Act(Seq(g.Spacing, Oom(g.Definition),
-			g.EndOfFile), --
+	g.Grammar = Ctx( --
+	Act(Pick(2, Seq(g.Spacing, Oom(g.Definition), g.EndOfFile)), --
 	function(args)
-		return builtGrammar
-	end)
+		local start = args.vals[1].ruleName
+		for _, val in pairs(args.vals) do
+			args.ctx.rules[val.ruleName] = val.op
+		end
+		return Ref(args.ctx.rules, start)
+	end), {rules = {}})
 
 	-- Definition <- Identifier LEFTARROW Expression
-	g.Definition = Act(Seq(g.Identifier, g.LEFTARROW,
-			g.Expression), --
+	g.Definition = Act(Seq(g.Identifier, g.LEFTARROW, g.Expression), --
 	function(args)
-		local id = args.vals[1]
-		local op = args.vals[3]
-		assert(opf.Op:includes(op))
-		builtGrammar.rules[id] = op
+		return {ruleName = args.vals[1], op = args.vals[3]}
 	end)
 
 	-- Expression <- Sequence (SLASH Sequence)*
-	g.Expression = Act(Seq(g.Sequence, Zom(
-			Pick(2, Seq(g.SLASH, g.Sequence)))), --
+	g.Expression = Act(Seq(g.Sequence, Zom(Pick(2, Seq(g.SLASH, g.Sequence)))), --
 	function(args)
-		return Cho(args.vals)
+		local choices = {}
+		if args.vals[1].__type then
+			table.insert(choices, args.vals[1])
+		end
+		for _, op in ipairs(args.vals[2]) do
+			if op.__type then
+				table.insert(choices, op)
+			end
+		end
+		return Cho(table.unpack(choices))
 	end)
 
 	-- Sequence <- Prefix*
 	g.Sequence = Act(Zom(g.Prefix), --
 	function(args)
-		return Seq(args.vals)
+		return Seq(table.unpack(args.vals))
 	end)
 
 	-- Prefix <- (AND / NOT)? Suffix
@@ -128,8 +134,7 @@ return function(operatorFactory)
 	end)
 
 	-- Suffix <- Primary (QUESTION / STAR / PLUS)?
-	g.Suffix = Act(Seq(g.Primary,
-			Opt(Cho(g.QUESTION, g.STAR, g.PLUS))), --
+	g.Suffix = Act(Seq(g.Primary, Opt(Cho(g.QUESTION, g.STAR, g.PLUS))), --
 	function(args)
 		local prim = args.vals[1]
 		local suff = args.vals[2]
@@ -157,7 +162,7 @@ return function(operatorFactory)
 	function(args)
 		local choice, val = next(args.vals)
 		if choice == 1 then
-			return Ref(val, builtGrammar)
+			return Ref(args.ctx.rules, val)
 		elseif choice == 5 then
 			return Any()
 		else
@@ -168,8 +173,7 @@ return function(operatorFactory)
 	-- # Lexical syntax
 
 	-- Identifier <- IdentStart IdentCont* Spacing
-	g.Identifier = Pick(1, Seq(
-			Match(Seq(g.IdentStart, Zom(g.IdentCont))), g.Spacing))
+	g.Identifier = Pick(1, Seq(Match(Seq(g.IdentStart, Zom(g.IdentCont))), g.Spacing))
 
 	-- IdentStart <- [a-zA-Z_]
 	g.IdentStart = Cho(Rng("a", "z"), Rng("A", "Z"), Rng("_"))
@@ -180,12 +184,8 @@ return function(operatorFactory)
 	-- Literal <- ['] (!['] Char)* ['] Spacing
 	--          / ["] (!["] Char)* ["] Spacing
 	g.Literal = Act(fCho( --
-	Pick(2,
-			Seq(Rng("'"), Match(Zom(Seq(Not(Rng("'")), g.Char))),
-					Rng("'"), g.Spacing)), --
-	Pick(2,
-			Seq(Rng('"'), Match(Zom(Seq(Not(Rng('"')), g.Char))),
-					Rng('"'), g.Spacing)) --
+	Pick(2, Seq(Rng("'"), Match(Zom(Seq(Not(Rng("'")), g.Char))), Rng("'"), g.Spacing)), --
+	Pick(2, Seq(Rng('"'), Match(Zom(Seq(Not(Rng('"')), g.Char))), Rng('"'), g.Spacing)) --
 	), function(args)
 		return Lit(args.vals)
 	end)
@@ -196,26 +196,25 @@ return function(operatorFactory)
 	Lit("]"), g.Spacing), --
 	function(args)
 		local ranges = args.vals[2]
-		return Cho(ranges)
+		return Cho(table.unpack(ranges))
 	end)
 
 	-- Range <- Char '-' Char / Char
-	g.Range =
-			Act(Cho(Seq(g.Char, Lit("-"), g.Char), g.Char), --
-			function(args)
-				local choice, val = next(args.vals)
-				if choice == 1 then
-					return Rng(val[1], val[3])
-				else
-					return Rng(val)
-				end
-			end)
+	g.Range = Act(Cho(Seq(g.Char, Lit("-"), g.Char), g.Char), --
+	function(args)
+		local choice, val = next(args.vals)
+		if choice == 1 then
+			return Rng(val[1], val[3])
+		else
+			return Rng(val)
+		end
+	end)
 
 	-- Char <- '\\' [nrt'"\[\]\\]
-	--       / '\\' [0-3][0-7][0-7]
+	--       / '\\' [0-2][0-7][0-7]
 	--       / '\\' [0-7][0-7]?
 	--       / !'\\' .
-	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo)
+	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo and should be 3)
 	g.Char = fCho(g.Escape, g.Octal, g.SimpleChar)
 	g.Escape = Act(Seq(Lit("\\"), Cho( --
 	Rng("n"), Rng("r"), Rng("t"), Rng("'"), --
@@ -229,13 +228,11 @@ return function(operatorFactory)
 			return c
 		end
 	end)
-	g.Octal = Act(Cho(Seq(Lit("\\"), Rng("0", "3"),
-			Rng("0", "7"), Rng("0", "7")), --
+	g.Octal = Act(Cho(Seq(Lit("\\"), Rng("0", "2"), Rng("0", "7"), Rng("0", "7")), --
 	Seq(Lit("\\"), Rng("0", "7"), Opt(Rng("0", "7"))) --
 	), --
 	function(args)
-		return string.char(tonumber(args.src:sub(args.pos + 1,
-				args.pos + args.len - 1), 8))
+		return string.char(tonumber(args.src:sub(args.pos + 1, args.pos + args.len - 1), 8))
 	end)
 	g.SimpleChar = Match(Seq(Not(Lit("\\")), Any()))
 
@@ -273,8 +270,7 @@ return function(operatorFactory)
 	g.Spacing = Zom(Cho(g.Space, g.Comment))
 
 	-- Comment <- '#' (!EndOfLine .)* EndOfLine
-	g.Comment = Seq(Lit("#"),
-			Zom(Seq(Not(g.EndOfLine), Any())), g.EndOfLine)
+	g.Comment = Seq(Lit("#"), Zom(Seq(Not(g.EndOfLine), Any())), g.EndOfLine)
 
 	-- Space <- ' ' / '\t' / EndOfLine
 	g.Space = Cho(Lit(" "), Lit("\t"), g.EndOfLine)
@@ -285,5 +281,5 @@ return function(operatorFactory)
 	-- EndOfFile <- !.
 	g.EndOfFile = Not(Any())
 
-	return pegGrammar
+	return g.Grammar
 end
