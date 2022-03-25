@@ -1,4 +1,4 @@
-local color = require "color"
+local colorText = require "colortext"
 
 local LINES = 24
 local COLUMNS = 80
@@ -62,11 +62,12 @@ local calcWindows = function(inputLen, -- complete length of text
 	local posWin2 = math.min(mark2 - offset2, inputLen - window2)
 
 	if posWin2 <= posWin1 + window1 + sep then -- combine windows
-		return posWin1, window1 + sep + window2, nil, nil
+		return posWin1, math.min(window1 + sep + window2, inputLen - posWin1 + 1), nil, nil
 	else
 		return posWin1, window1, posWin2, window2
 	end
 end
+calcWindows(77, 13, 26, 8, 1, 25, 49, 24)
 
 local filterInPlace = function(colTxt)
 	local map = {["\t"] = "→", ["\r"] = "←", ["\n"] = "↵", [" "] = "·"}
@@ -78,9 +79,11 @@ local filterInPlace = function(colTxt)
 	end
 end
 
+dbg = 0
 dsp.renderLine = function(buffer, index, colTxt, markStart, markEnd)
+	dbg = dbg + 1
 
-	local lineNumber = color( --
+	local lineNumber = colorText( --
 	string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index))
 
 	local adjustedWin1 = COLUMNS_AROUND_HIGHLIGHT_BEGIN + COLUMNS_LINE_NUMBER - #lineNumber
@@ -89,6 +92,10 @@ dsp.renderLine = function(buffer, index, colTxt, markStart, markEnd)
 	markStart, adjustedWin1, COLUMNS_BEFORE_HIGHLIGHT_BEGIN, --
 	COLUMNS_SEP2, --
 	markEnd, COLUMNS_AROUND_HIGHLIGHT_END, COLUMNS_BEFORE_HIGHLIGHT_END)
+
+	if dbg == 8640 then
+		dbg = dbg
+	end
 
 	table.insert(buffer, tostring(lineNumber))
 	table.insert(buffer, tostring(COLUMNSEP1))
@@ -161,7 +168,7 @@ dsp.render = function(buffer, colTxt, markStart, markEnd)
 end
 
 for _ = 1, LINES do
-	print(color("\n"))
+	print(colorText("\n"))
 end
 
 return dsp

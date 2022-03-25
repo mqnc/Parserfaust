@@ -1,7 +1,7 @@
 local DEFAULT_FG_COLOR = {221, 221, 221}
 local DEFAULT_BG_COLOR = {0, 0, 0}
 
-local color
+local colorText
 local colorTextMt
 
 local isColorTxt = function(txt)
@@ -17,13 +17,20 @@ colorTextMt = {
 			viewLen = self.viewLen
 		}
 		for _, char in ipairs(self.txt) do
-			table.insert(result.txt, {chr = char.chr, fg = char.fg, bg = char.bg})
+			table.insert(result.txt, { --
+				chr = char.chr,
+				fg = char.fg,
+				bg = char.bg,
+				tag = char.tag
+			})
 		end
 		setmetatable(result, colorTextMt)
 		return result
 	end,
 
 	fromTo = function(self, from, to)
+		assert(from >= 1 and from <= self.viewLen + 1)
+		assert(to >= from - 1 and to <= self.viewLen)
 		local result = { --
 			txt = self.txt,
 			viewPos = self.viewPos + from - 1,
@@ -34,11 +41,15 @@ colorTextMt = {
 	end,
 
 	from = function(self, from)
-		return self:fromTo(from, self.viewLen - from + 1)
+		return self:fromTo(from, self.viewLen)
 	end,
 
 	take = function(self, len)
 		return self:fromTo(1, len)
+	end,
+
+	__index = function(self, index)
+		return self.fromTo(index, index)
 	end,
 
 	fg = function(self, rgb)
@@ -51,6 +62,13 @@ colorTextMt = {
 	bg = function(self, rgb)
 		for i = self.viewPos, self.viewPos + self.viewLen - 1 do
 			self.txt[i].bg = rgb
+		end
+		return self
+	end,
+
+	tag = function(self, userData)
+		for i = self.viewPos, self.viewPos + self.viewLen - 1 do
+			self.txt[i].tag = userData
 		end
 		return self
 	end,
@@ -71,8 +89,8 @@ colorTextMt = {
 		local lastBgAnsi
 		for i = self.viewPos, self.viewPos + self.viewLen - 1 do
 			local colChar = self.txt[i]
-			local fg = colChar.fg
-			local bg = colChar.bg
+			local fg = colChar.fg or DEFAULT_FG_COLOR
+			local bg = colChar.bg or DEFAULT_BG_COLOR
 			if colChar.chr == "\n" then
 				fg = DEFAULT_FG_COLOR
 				bg = DEFAULT_BG_COLOR
@@ -99,7 +117,7 @@ colorTextMt = {
 		local result = {txt = {}}
 		setmetatable(result, colorTextMt)
 		for _, txt in ipairs({txt1, txt2}) do
-			txt = color(txt)
+			txt = colorText(txt)
 			for _, colChar in ipairs(txt.txt) do
 				table.insert(result.txt, colChar)
 			end
@@ -112,7 +130,7 @@ colorTextMt = {
 }
 colorTextMt.__index = colorTextMt
 
-color = function(txt)
+colorText = function(txt)
 	if isColorTxt(txt) then
 		return txt
 	end
@@ -123,9 +141,7 @@ color = function(txt)
 	setmetatable(result, colorTextMt)
 	for i = 1, utf8.len(txt) do
 		table.insert(result.txt, { --
-			chr = txt:sub(utf8.offset(txt, i), utf8.offset(txt, i + 1) - 1),
-			fg = DEFAULT_FG_COLOR,
-			bg = DEFAULT_BG_COLOR
+			chr = txt:sub(utf8.offset(txt, i), utf8.offset(txt, i + 1) - 1)
 		})
 	end
 	result.viewPos = 1
@@ -133,4 +149,4 @@ color = function(txt)
 	return result
 end
 
-return color
+return colorText
