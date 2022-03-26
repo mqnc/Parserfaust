@@ -28,28 +28,28 @@ colorTextMt = {
 		return result
 	end,
 
-	fromTo = function(self, from, to)
-		assert(from >= 1 and from <= self.viewLen + 1)
-		assert(to >= from - 1 and to <= self.viewLen)
+	range = function(self, first, past)
+		assert(first >= 1 and first <= 1 + self.viewLen)
+		assert(past >= first and past <= 1 + self.viewLen)
 		local result = { --
 			txt = self.txt,
-			viewPos = self.viewPos + from - 1,
-			viewLen = to - from + 1
+			viewPos = self.viewPos + first - 1,
+			viewLen = past - first
 		}
 		setmetatable(result, colorTextMt)
 		return result
 	end,
 
 	from = function(self, from)
-		return self:fromTo(from, self.viewLen)
+		return self:range(from, self.viewLen)
 	end,
 
 	take = function(self, len)
-		return self:fromTo(1, len)
+		return self:range(1, 1 + len)
 	end,
 
 	__index = function(self, index)
-		return self.fromTo(index, index)
+		return self.range(index, index + 1)
 	end,
 
 	fg = function(self, rgb)

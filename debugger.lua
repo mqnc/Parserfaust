@@ -5,6 +5,22 @@ local dsp = require "render"
 local colorText = require "colortext"
 local colorSpace = require "colorspace"
 
+-- local FG_COLOR_SELECTED = {0, 0, 0}
+-- local BG_COLOR_SELECTED = {255, 192, 100}
+-- local FG_COLOR_ACCEPTED = {0, 0, 0}
+-- local BG_COLOR_ACCEPTED = {0, 255, 0}
+-- local FG_COLOR_REJECTED = {0, 0, 0}
+-- local BG_COLOR_REJECTED = {255, 50, 50}
+
+-- local FG_COLOR_SELECTED = {128, 64, 0}
+-- local BG_COLOR_SELECTED = {255, 230, 192}
+local FG_COLOR_SELECTED = {0, 64, 255}
+local BG_COLOR_SELECTED = {255, 255, 255}
+local FG_COLOR_ACCEPTED = {0, 128, 0}
+local BG_COLOR_ACCEPTED = {128, 255, 160}
+local FG_COLOR_REJECTED = {192, 0, 0}
+local BG_COLOR_REJECTED = {255, 160, 160}
+
 _G.stack = {}
 
 local pause = function()
@@ -33,7 +49,7 @@ local renderStack = function(buffer, matchLen)
 	local stack = _G.stack
 
 	local highlighted = stack[#stack].op
-	local highlightTag = {}
+	local highlightTag = {"highlight"}
 
 	local lines = {}
 	local marks = {}
@@ -56,9 +72,9 @@ local renderStack = function(buffer, matchLen)
 				if hl and not hlBefore then
 					mark1 = pos
 				elseif hlBefore and not hl then
-					mark2 = pos - 1
-				elseif pos == #line and mark2 == nil then
 					mark2 = pos
+				elseif pos == #line and mark2 == nil then
+					mark2 = pos + 1
 				end
 				hlBefore = hl
 			end
@@ -73,21 +89,23 @@ local renderStack = function(buffer, matchLen)
 	end
 
 	for i, line in ipairs(lines) do
-		local level = #lines - i + 1
+		local level = 1 + #lines - i
 		local highlightBackground = palette(level + 1)
 		local highlightForeground = {255, 255, 255}
 		if i == 1 then
-			highlightBackground = {255, 192, 0}
-			highlightForeground = {0, 0, 0}
+			highlightBackground = BG_COLOR_SELECTED
+			highlightForeground = FG_COLOR_SELECTED
 			if matchLen == opf.Rejected then
-				highlightBackground = {255, 0, 0}
+				highlightBackground = BG_COLOR_REJECTED
+				highlightForeground = FG_COLOR_REJECTED
 			elseif matchLen ~= nil then
-				highlightBackground = {0, 230, 0}
+				highlightBackground = BG_COLOR_ACCEPTED
+				highlightForeground = FG_COLOR_ACCEPTED
 			end
 		end
 
 		line:fg({255, 255, 255}):bg(palette(level))
-		line:fromTo(marks[i][1], marks[i][2]):bg(highlightBackground):fg(highlightForeground)
+		line:range(marks[i][1], marks[i][2]):bg(highlightBackground):fg(highlightForeground)
 		dsp.renderLine(buffer, level, line, marks[i][1], marks[i][2])
 	end
 	table.insert(buffer, "\n")
@@ -97,15 +115,24 @@ end
 _G.installDebugHooks = function(op)
 	local parse = op.parse
 	op.parse = function(src, pos, ctx)
+		pos = pos or 1
 
 		table.insert(stack, {op = op, pos = pos, ctx = ctx})
 
-		local from = pos or 1
 		local cText = colorText(src)
-		cText:from(from):take(1):fg({0, 0, 0}):bg({255, 192, 0})
+
+		local level = 0
+		for i, layer in ipairs(stack) do
+			if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
+				level = level + 1
+				cText:range(layer.pos, pos):fg({255, 255, 255}):bg(palette(level))
+			end
+		end
+
+		cText:from(pos):take(1):fg(FG_COLOR_SELECTED):bg(BG_COLOR_SELECTED)
 
 		local buffer = {}
-		dsp.render(buffer, cText, from, from)
+		dsp.render(buffer, cText, pos, pos)
 		renderStack(buffer)
 		io.write(table.concat(buffer))
 		pause()
@@ -113,17 +140,25 @@ _G.installDebugHooks = function(op)
 		local len, vals = parse(src, pos, ctx)
 
 		cText = colorText(src)
-		local to
+		level = 0
+		for i, layer in ipairs(stack) do
+			if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
+				level = level + 1
+				cText:range(layer.pos, pos):fg({255, 255, 255}):bg(palette(level))
+			end
+		end
+
+		local past
 		if len == opf.Rejected then
-			to = from
-			cText:fromTo(from, to):fg({0, 0, 0}):bg({255, 0, 0})
+			past = pos + 1
+			cText:range(pos, past):fg(FG_COLOR_REJECTED):bg(BG_COLOR_REJECTED)
 		else
-			to = from + len - 1
-			cText:fromTo(from, to):fg({0, 0, 0}):bg({0, 221, 0})
+			past = pos + math.max(len, 1)
+			cText:range(pos, past):fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED)
 		end
 
 		buffer = {}
-		dsp.render(buffer, cText, from, to)
+		dsp.render(buffer, cText, pos, past)
 		renderStack(buffer, len)
 		io.write(table.concat(buffer))
 		pause()

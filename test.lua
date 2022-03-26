@@ -18,3 +18,10 @@ local len, parser2 = parser.parse(source)
 -- local len, parser3 = parser2.parse(source)
 -- -- print(stringify(parser3))
 print("\027[m")
+
+-- local txt="1234567890\n1234567890\n12345678901234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n1234567890\n"
+
+-- local r=require "render"
+-- local buffer={}
+-- r.render(buffer,txt,1,5)
+-- print(table.concat(buffer))
