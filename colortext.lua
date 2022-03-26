@@ -1,4 +1,4 @@
-local DEFAULT_FG_COLOR = {221, 221, 221}
+local DEFAULT_FG_COLOR = {224, 224, 224}
 local DEFAULT_BG_COLOR = {0, 0, 0}
 
 local colorText

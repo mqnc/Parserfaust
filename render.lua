@@ -2,15 +2,17 @@ local colorText = require "colortext"
 
 local LINES = 24
 local COLUMNS = 80
+local COLUMNS_LINE_NUMBER = 3
 
-local LINES_AROUND_HIGHLIGHT_FIRST = LINES // 3
+local LINES_AROUND_HIGHLIGHT_FIRST = LINES // 3 - 2
 local LINES_BEFORE_HIGHLIGHT_FIRST = LINES_AROUND_HIGHLIGHT_FIRST // 2
-local V_ELLIPSIS = "          ···\n"
+local V_ELLIPSIS = " ⋮"
 local V_ELLIPSIS_HEIGHT = 1
-local LINES_AROUND_HIGHLIGHT_PAST = LINES // 3
+local LINES_AROUND_HIGHLIGHT_PAST = LINES // 3 - 2
 local LINES_BEFORE_HIGHLIGHT_PAST = LINES_AROUND_HIGHLIGHT_PAST // 2
 local LINE_SEPARATOR = --
-"================================================================================"
+string.rep("─", COLUMNS_LINE_NUMBER) .. "┼" --
+.. string.rep("─", COLUMNS - COLUMNS_LINE_NUMBER - 1)
 local LINE_SEPARATOR_HEIGHT = 1
 local LINES_INPUT = 1
 local LINES_STACK = LINES --
@@ -20,8 +22,7 @@ local LINES_STACK = LINES --
 - LINE_SEPARATOR_HEIGHT --
 - LINES_INPUT
 
-local COLUMNS_LINE_NUMBER = 3
-local COLUMN_SEPARATOR = " "
+local COLUMN_SEPARATOR = "│"
 local COLUMN_SEPARATOR_WIDTH = utf8.len(COLUMN_SEPARATOR)
 local COLUMNS_AROUND_HIGHLIGHT_FIRST = COLUMNS // 3
 local COLUMNS_BEFORE_HIGHLIGHT_FIRST = COLUMNS_AROUND_HIGHLIGHT_FIRST // 3
@@ -84,16 +85,39 @@ local filterInPlace = function(colTxt)
 		local mapped = map[colChar.chr]
 		if mapped ~= nil then
 			colChar.chr = mapped
+			colChar.fg = {128, 128, 128}
 		end
 	end
+end
+
+renderer.renderSeparator = function(buffer)
+	table.insert(buffer, tostring(LINE_SEPARATOR) .. "\n")
+end
+
+renderer.getNumStackLines = function()
+	return LINES_STACK
 end
 
 dbg = 0
 renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast)
 	dbg = dbg + 1
 
-	local lineNumber = colorText( --
-	string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index))
+	local lineNumber
+	if index then
+		lineNumber = colorText( --
+		string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index)) --
+		:fg({255, 255, 0})
+	else
+		lineNumber = colorText(string.rep(" ", COLUMNS_LINE_NUMBER))
+	end
+
+	table.insert(buffer, tostring(lineNumber))
+	table.insert(buffer, tostring(COLUMN_SEPARATOR))
+
+	if colTxt == nil then
+		table.insert(buffer, "\n")
+		return
+	end
 
 	local adjustedWin1 = COLUMNS_AROUND_HIGHLIGHT_FIRST + COLUMNS_LINE_NUMBER - #lineNumber
 
@@ -101,9 +125,6 @@ renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast)
 	markFirst, adjustedWin1, COLUMNS_BEFORE_HIGHLIGHT_FIRST, --
 	H_ELLIPSIS_WHIDTH, --
 	markPast, COLUMNS_AROUND_HIGHLIGHT_PAST, COLUMNS_BEFORE_HIGHLIGHT_PAST)
-
-	table.insert(buffer, tostring(lineNumber))
-	table.insert(buffer, tostring(COLUMN_SEPARATOR))
 
 	if first1 ~= 1 then
 		table.insert(buffer, tostring(H_ELLIPSIS))

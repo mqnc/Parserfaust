@@ -5,15 +5,6 @@ local dsp = require "render"
 local colorText = require "colortext"
 local colorSpace = require "colorspace"
 
--- local FG_COLOR_SELECTED = {0, 0, 0}
--- local BG_COLOR_SELECTED = {255, 192, 100}
--- local FG_COLOR_ACCEPTED = {0, 0, 0}
--- local BG_COLOR_ACCEPTED = {0, 255, 0}
--- local FG_COLOR_REJECTED = {0, 0, 0}
--- local BG_COLOR_REJECTED = {255, 50, 50}
-
--- local FG_COLOR_SELECTED = {128, 64, 0}
--- local BG_COLOR_SELECTED = {255, 230, 192}
 local FG_COLOR_SELECTED = {0, 64, 255}
 local BG_COLOR_SELECTED = {255, 255, 255}
 local FG_COLOR_ACCEPTED = {0, 128, 0}
@@ -88,6 +79,10 @@ local renderStack = function(buffer, matchLen)
 		end
 	end
 
+	for i = 1, dsp.getNumStackLines() - #lines do
+		dsp.renderLine(buffer)
+	end
+
 	for i, line in ipairs(lines) do
 		local level = 1 + #lines - i
 		local highlightBackground = palette(level + 1)
@@ -107,6 +102,9 @@ local renderStack = function(buffer, matchLen)
 		line:fg({255, 255, 255}):bg(palette(level))
 		line:range(marks[i][1], marks[i][2]):bg(highlightBackground):fg(highlightForeground)
 		dsp.renderLine(buffer, level, line, marks[i][1], marks[i][2])
+		if i >= dsp.getNumStackLines() then
+			break
+		end
 	end
 	table.insert(buffer, "\n")
 
@@ -133,6 +131,7 @@ _G.installDebugHooks = function(op)
 
 		local buffer = {}
 		dsp.render(buffer, cText, pos, pos)
+		dsp.renderSeparator(buffer)
 		renderStack(buffer)
 		io.write(table.concat(buffer))
 		pause()
@@ -159,6 +158,7 @@ _G.installDebugHooks = function(op)
 
 		buffer = {}
 		dsp.render(buffer, cText, pos, past)
+		dsp.renderSeparator(buffer)
 		renderStack(buffer, len)
 		io.write(table.concat(buffer))
 		pause()
