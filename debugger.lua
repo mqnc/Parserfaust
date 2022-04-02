@@ -12,13 +12,40 @@ local BG_COLOR_ACCEPTED = {128, 255, 160}
 local FG_COLOR_REJECTED = {192, 0, 0}
 local BG_COLOR_REJECTED = {255, 160, 160}
 
-_G.stack = {}
+local stack = {}
+local breakPoint = function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)
+	return true
+end
 
-local pause = function()
+local processUserInput = function()
+
+	::redo::
+	io.write("break if: ")
 	local userInput = io.read()
-	if userInput == "q" then
+
+	-- if true then
+	-- 	return
+	-- end
+
+	if userInput == "" then
+		return
+	elseif userInput == "q" then
 		print("terminated")
 		os.exit(0)
+	else
+		local prefix = "function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)\n\treturn "
+		local postfix = "\nend"
+
+		local code = "return " .. prefix .. userInput .. postfix
+		local breakPointFactory, err = --
+		load(code, "user-defined break condition")
+		if breakPointFactory == nil then
+			print(code)
+			print(err)
+			goto redo
+		else
+			breakPoint = breakPointFactory()
+		end
 	end
 end
 
@@ -27,23 +54,27 @@ local paletteCache = {}
 
 local function palette(i)
 	if paletteCache[i] == nil then
+		local lumi = 0.5 + (i % 2) * 0.1
+		local chroma = 0.2
+		local hue = i * phi * 2 * math.pi + 2
 		paletteCache[i] = { --
 			colorSpace.RGB_to_sRGB( --
 			colorSpace.OKLab_to_RGB( --
-			colorSpace.OKLCh_to_OKLab(0.5, 0.2, i * phi * 2 * math.pi + 2)))
+			colorSpace.OKLCh_to_OKLab(lumi, chroma, hue)))
 		}
 	end
 	return paletteCache[i]
 end
 
 local renderStack = function(buffer, matchLen)
-	local stack = _G.stack
+	local stack = stack
 
 	local highlighted = stack[#stack].op
 	local highlightTag = {"highlight"}
 
 	local lines = {}
 	local marks = {}
+	local levels = {}
 
 	for i = #stack, 1, -1 do
 		if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
@@ -72,6 +103,7 @@ local renderStack = function(buffer, matchLen)
 
 			table.insert(lines, line)
 			table.insert(marks, {mark1, mark2})
+			table.insert(levels, i)
 
 			if i > 1 then
 				highlighted = stack[i - 1].op
@@ -79,13 +111,13 @@ local renderStack = function(buffer, matchLen)
 		end
 	end
 
-	for i = 1, dsp.getNumStackLines() - #lines do
+	for _ = 1, dsp.getNumStackLines() - #lines do
 		dsp.renderLine(buffer)
 	end
 
 	for i, line in ipairs(lines) do
-		local level = 1 + #lines - i
-		local highlightBackground = palette(level + 1)
+		local displayLevel = 1 + #lines - i
+		local highlightBackground = palette(displayLevel + 1)
 		local highlightForeground = {255, 255, 255}
 		if i == 1 then
 			highlightBackground = BG_COLOR_SELECTED
@@ -99,17 +131,75 @@ local renderStack = function(buffer, matchLen)
 			end
 		end
 
-		line:fg({255, 255, 255}):bg(palette(level))
+		line:fg({255, 255, 255}):bg(palette(displayLevel))
 		line:range(marks[i][1], marks[i][2]):bg(highlightBackground):fg(highlightForeground)
-		dsp.renderLine(buffer, level, line, marks[i][1], marks[i][2])
+		dsp.renderLine(buffer, levels[i], line, marks[i][1], marks[i][2], palette(displayLevel))
 		if i >= dsp.getNumStackLines() then
 			break
 		end
 	end
-	table.insert(buffer, "\n")
 
 end
 
+local renderSnapshot = function(src, matchLen)
+
+	local pos = stack[#stack].pos
+
+	local cText = colorText(src .. "∎")
+
+	local level = 0
+	for i, layer in ipairs(stack) do
+		if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
+			level = level + 1
+			cText:range(layer.pos, pos):fg({255, 255, 255}):bg(palette(level))
+		end
+	end
+
+	local past
+	if matchLen == nil then
+		past = pos + 1
+		cText:range(pos, past):fg(FG_COLOR_SELECTED):bg(BG_COLOR_SELECTED)
+	elseif matchLen == opf.Rejected then
+		past = pos + 1
+		cText:range(pos, past):fg(FG_COLOR_REJECTED):bg(BG_COLOR_REJECTED)
+	else
+		past = pos + math.max(matchLen, 1)
+		cText:range(pos, past):fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED)
+	end
+
+	local buffer = {}
+	dsp.render(buffer, cText, pos, past)
+	dsp.renderSeparator(buffer)
+	renderStack(buffer, matchLen)
+	io.write(table.concat(buffer))
+
+end
+
+local lnColCache = {}
+local lnCol = function(src, pos)
+	if lnColCache[src] == nil then
+		lnColCache[src] = {}
+	end
+	if lnColCache[src][pos] == nil then
+		local ln = 1
+		local col = 1
+		for i = 1, #src do
+			local c = src:sub(i, i)
+			if i == pos then
+				return ln, col
+			end
+			col = col + 1
+			if c == "\n" then
+				ln = ln + 1
+				col = 1
+			end
+		end
+		lnColCache[src][pos] = {ln, col}
+	end
+	return table.unpack(lnColCache[src][pos])
+end
+
+local step = 0
 _G.installDebugHooks = function(op)
 	local parse = op.parse
 	op.parse = function(src, pos, ctx)
@@ -117,51 +207,47 @@ _G.installDebugHooks = function(op)
 
 		table.insert(stack, {op = op, pos = pos, ctx = ctx})
 
-		local cText = colorText(src)
-
-		local level = 0
-		for i, layer in ipairs(stack) do
-			if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
-				level = level + 1
-				cText:range(layer.pos, pos):fg({255, 255, 255}):bg(palette(level))
+		local ref = nil
+		local inside = {}
+		if op.__type[2] == "Reference" then
+			ref = op.ruleName
+		end
+		for _, layer in ipairs(stack) do
+			if layer.op.__type[2] == "Reference" then
+				inside[layer.op.ruleName] = true
 			end
 		end
 
-		cText:from(pos):take(1):fg(FG_COLOR_SELECTED):bg(BG_COLOR_SELECTED)
+		local ln, col = lnCol(src, pos)
 
-		local buffer = {}
-		dsp.render(buffer, cText, pos, pos)
-		dsp.renderSeparator(buffer)
-		renderStack(buffer)
-		io.write(table.concat(buffer))
-		pause()
+		local function info()
+			io.write("⏵" .. tostring(step) .. -- 
+			" @" .. tostring(pos) .. --
+			" (" .. tostring(ln) .. ":" .. tostring(col) .. "); ")
+		end
+
+		step = step + 1
+		if breakPoint(step, src, pos, ln, col, ctx, stack, inside, ref, nil, nil) then
+			renderSnapshot(src)
+			info()
+			processUserInput()
+		end
 
 		local len, vals = parse(src, pos, ctx)
 
-		cText = colorText(src)
-		level = 0
-		for i, layer in ipairs(stack) do
-			if i == 1 or stack[i - 1].op.__type[2] == "Reference" then
-				level = level + 1
-				cText:range(layer.pos, pos):fg({255, 255, 255}):bg(palette(level))
-			end
-		end
-
-		local past
+		local match
 		if len == opf.Rejected then
-			past = pos + 1
-			cText:range(pos, past):fg(FG_COLOR_REJECTED):bg(BG_COLOR_REJECTED)
+			match = false
 		else
-			past = pos + math.max(len, 1)
-			cText:range(pos, past):fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED)
+			match = string.sub(src, pos, pos + len - 1)
 		end
 
-		buffer = {}
-		dsp.render(buffer, cText, pos, past)
-		dsp.renderSeparator(buffer)
-		renderStack(buffer, len)
-		io.write(table.concat(buffer))
-		pause()
+		step = step + 1
+		if breakPoint(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals) then
+			renderSnapshot(src, len)
+			info()
+			processUserInput()
+		end
 
 		table.remove(stack)
 

@@ -4,11 +4,11 @@ local LINES = 24
 local COLUMNS = 80
 local COLUMNS_LINE_NUMBER = 3
 
-local LINES_AROUND_HIGHLIGHT_FIRST = LINES // 3 - 2
+local LINES_AROUND_HIGHLIGHT_FIRST = LINES // 3
 local LINES_BEFORE_HIGHLIGHT_FIRST = LINES_AROUND_HIGHLIGHT_FIRST // 2
-local V_ELLIPSIS = " ⋮"
+local V_ELLIPSIS = "⋮"
 local V_ELLIPSIS_HEIGHT = 1
-local LINES_AROUND_HIGHLIGHT_PAST = LINES // 3 - 2
+local LINES_AROUND_HIGHLIGHT_PAST = LINES // 3
 local LINES_BEFORE_HIGHLIGHT_PAST = LINES_AROUND_HIGHLIGHT_PAST // 2
 local LINE_SEPARATOR = --
 string.rep("─", COLUMNS_LINE_NUMBER) .. "┼" --
@@ -17,7 +17,6 @@ local LINE_SEPARATOR_HEIGHT = 1
 local LINES_INPUT = 1
 local LINES_STACK = LINES --
 - LINES_AROUND_HIGHLIGHT_FIRST --
-- 3 * V_ELLIPSIS_HEIGHT --
 - LINES_AROUND_HIGHLIGHT_PAST --
 - LINE_SEPARATOR_HEIGHT --
 - LINES_INPUT
@@ -26,13 +25,12 @@ local COLUMN_SEPARATOR = "│"
 local COLUMN_SEPARATOR_WIDTH = utf8.len(COLUMN_SEPARATOR)
 local COLUMNS_AROUND_HIGHLIGHT_FIRST = COLUMNS // 3
 local COLUMNS_BEFORE_HIGHLIGHT_FIRST = COLUMNS_AROUND_HIGHLIGHT_FIRST // 3
-local H_ELLIPSIS = "…"
-local H_ELLIPSIS_WHIDTH = utf8.len(H_ELLIPSIS)
+local H_ELLIPSIS = colorText("…"):bg({128, 128, 128}):fg({255, 255, 0})
+local H_ELLIPSIS_WHIDTH = #H_ELLIPSIS
 local COLUMNS_AROUND_HIGHLIGHT_PAST = COLUMNS --
 - COLUMNS_LINE_NUMBER --
 - COLUMN_SEPARATOR_WIDTH --
 - COLUMNS_AROUND_HIGHLIGHT_FIRST --
-- 3 * H_ELLIPSIS_WHIDTH
 local COLUMNS_BEFORE_HIGHLIGHT_PAST = COLUMNS_AROUND_HIGHLIGHT_PAST // 2
 
 local renderer = {}
@@ -50,33 +48,70 @@ local combineViews = function(inputLen, -- complete length of input text
 		window2, -- size of window around focus2
 		offset2 -- position of focus2 in window2
 )
-	local maxOutputLen = ellipsis + window1 + ellipsis + window2 + ellipsis
+
+	local maxOutputLen = window1 + window2
 
 	if inputLen <= maxOutputLen then -- show complete text
-		return 1, 1 + inputLen, nil, nil
+		return 0, 1, 1 + inputLen, 0, 1 + inputLen, 1 + inputLen, 0
+	end
+
+	if focus1 == nil and focus2 == nil then
+		focus1 = 1
+		focus2 = 1
+	elseif focus1 == nil then
+		focus1 = focus2
+	elseif focus2 == nil then
+		focus2 = focus1
 	end
 
 	local first1 = math.max(focus1 - offset1, 1)
 	local past1 = math.min(first1 + window1, inputLen)
-	first1 = past1 - window1
-	local first2 = math.max(focus2 - offset2, past1 + ellipsis)
+	first1 = math.max(past1 - window1, 1)
+
+	local first2 = math.max(focus2 - offset2, 1)
 	local past2 = math.min(first2 + window2, inputLen)
-	first2 = past2 - window2
+	first2 = math.max(past2 - window2, 1)
 
-	if first1 <= 1 + ellipsis then
-		-- no ellipsis in the beginning, extend window1 to beginning
-		first1 = 1
-	end
-	if past2 >= 1 + inputLen - ellipsis then
-		-- no ellipsis in the end, extend window2 to end
-		past2 = 1 + inputLen
-	end
+	local firstFirst = math.min(first1, first2)
+	local secondFirst = math.max(first1, first2)
+	local firstPast = math.min(past1, past2)
+	local lastPast = math.max(past1, past2)
 
-	if past1 + ellipsis >= first2 then -- combine windows
-		return first1, past2, nil, nil
+	if secondFirst <= firstPast then -- merge intervals
+		local rest = maxOutputLen - (lastPast - firstFirst)
+		firstFirst = math.max(firstFirst - rest // 2, 1)
+		lastPast = math.min(firstFirst + maxOutputLen, 1 + inputLen)
+		firstFirst = lastPast - maxOutputLen
+
+		local elliStart = (firstFirst ~= 1) and ellipsis or 0
+		firstFirst = firstFirst + elliStart
+		local elliEnd = (lastPast ~= 1 + inputLen) and ellipsis or 0
+		lastPast = lastPast - elliEnd
+
+		assert(elliStart + (lastPast - firstFirst) + elliEnd --
+		== maxOutputLen)
+		assert(firstFirst - elliStart >= 1)
+		assert(lastPast + elliEnd <= 1 + inputLen)
+
+		return elliStart, firstFirst, lastPast, 0, lastPast, lastPast, elliEnd
 	else
-		return first1, past1, first2, past2
+		local elliStart = (firstFirst ~= 1) and ellipsis or 0
+		firstFirst = firstFirst + elliStart
+		local elliMiddle = ellipsis
+		firstPast = firstPast - elliMiddle // 2
+		secondFirst = secondFirst + (elliMiddle - elliMiddle // 2)
+		local elliEnd = (lastPast ~= 1 + inputLen) and ellipsis or 0
+		lastPast = lastPast - elliEnd
+
+		assert(elliStart + (firstPast - firstFirst) + elliMiddle --
+		+ (lastPast - secondFirst) + elliEnd --
+		== maxOutputLen)
+		assert(firstFirst - elliStart >= 1)
+		assert(lastPast + elliEnd <= 1 + inputLen)
+
+		return elliStart, firstFirst, firstPast, elliMiddle, secondFirst, lastPast, elliEnd
 	end
+
 end
 
 local filterInPlace = function(colTxt)
@@ -94,20 +129,24 @@ renderer.renderSeparator = function(buffer)
 	table.insert(buffer, tostring(LINE_SEPARATOR) .. "\n")
 end
 
+renderer.getNumColumns = function()
+	return COLUMNS
+end
+
 renderer.getNumStackLines = function()
 	return LINES_STACK
 end
 
-dbg = 0
-renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast)
-	dbg = dbg + 1
+renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast, fill)
 
 	local lineNumber
-	if index then
+	if type(index) == "number" then
 		lineNumber = colorText( --
 		string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index)) --
 		:fg({255, 255, 0})
-	else
+	elseif type(index) == "string" then
+		lineNumber = colorText(string.rep(" ", COLUMNS_LINE_NUMBER - utf8.len(index)) .. index)
+	elseif index == nil then
 		lineNumber = colorText(string.rep(" ", COLUMNS_LINE_NUMBER))
 	end
 
@@ -121,32 +160,39 @@ renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast)
 
 	local adjustedWin1 = COLUMNS_AROUND_HIGHLIGHT_FIRST + COLUMNS_LINE_NUMBER - #lineNumber
 
-	local first1, past1, first2, past2 = combineViews(#colTxt, --
-	markFirst, adjustedWin1, COLUMNS_BEFORE_HIGHLIGHT_FIRST, --
+	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd = --
+	combineViews(#colTxt, --
+	markFirst, --
+	adjustedWin1, --
+	COLUMNS_BEFORE_HIGHLIGHT_FIRST, --
 	H_ELLIPSIS_WHIDTH, --
-	markPast, COLUMNS_AROUND_HIGHLIGHT_PAST, COLUMNS_BEFORE_HIGHLIGHT_PAST)
+	markPast, --
+	COLUMNS_AROUND_HIGHLIGHT_PAST, --
+	COLUMNS_BEFORE_HIGHLIGHT_PAST)
 
-	if first1 ~= 1 then
+	if elliStart > 0 then
 		table.insert(buffer, tostring(H_ELLIPSIS))
 	end
-
 	local part1 = colTxt:clone():range(first1, past1)
 	filterInPlace(part1)
 	table.insert(buffer, tostring(part1))
-	if first2 == nil then
-		if past1 < 1 + #colTxt then
-			table.insert(buffer, tostring(H_ELLIPSIS))
-		end
-	else
+	if elliMiddle > 0 then
 		table.insert(buffer, tostring(H_ELLIPSIS))
-		local part2 = colTxt:clone():range(first2, past2)
-		filterInPlace(part2)
-		table.insert(buffer, tostring(part2))
-
-		if past2 < 1 + #colTxt then
-			table.insert(buffer, tostring(H_ELLIPSIS))
-		end
 	end
+	local part2 = colTxt:clone():range(first2, past2)
+	filterInPlace(part2)
+	table.insert(buffer, tostring(part2))
+	if elliEnd > 0 then
+		table.insert(buffer, tostring(H_ELLIPSIS))
+	end
+
+	if fill then
+		local spacer = string.rep(" ", --
+		COLUMNS - #lineNumber - COLUMN_SEPARATOR_WIDTH - elliStart - #part1 --
+		- elliMiddle - #part2 - elliEnd)
+		table.insert(buffer, tostring(colorText(spacer):bg(fill)))
+	end
+
 	table.insert(buffer, "\n")
 end
 
@@ -176,15 +222,23 @@ renderer.render = function(buffer, colTxt, markFirst, markPast)
 			startOfLine = i + 1
 		end
 	end
+	if lineMarkEnd == nil then
+		lineMarkEnd = 1 + #lines
+	end
 
-	local first1, past1, first2, past2 = combineViews(#lines, -- 
-	lineMarkStart, -- 
-	LINES_AROUND_HIGHLIGHT_FIRST, -- 
+	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd = --
+	combineViews(#lines, --
+	lineMarkStart, --
+	LINES_AROUND_HIGHLIGHT_FIRST, --
 	LINES_BEFORE_HIGHLIGHT_FIRST, --
 	V_ELLIPSIS_HEIGHT, --
-	lineMarkEnd + 1, -- 
-	LINES_AROUND_HIGHLIGHT_PAST, -- 
+	lineMarkEnd + 1, --
+	LINES_AROUND_HIGHLIGHT_PAST, --
 	LINES_BEFORE_HIGHLIGHT_PAST)
+
+	if elliStart > 0 then
+		renderer.renderLine(buffer, V_ELLIPSIS)
+	end
 
 	for i = first1, past1 - 1 do
 		local f, p
@@ -196,19 +250,26 @@ renderer.render = function(buffer, colTxt, markFirst, markPast)
 		end
 		renderer.renderLine(buffer, i, lines[i], f, p)
 	end
-	if first2 ~= nil then
-		table.insert(buffer, tostring(V_ELLIPSIS))
-		for i = first2, past2 - 1 do
-			local f, p
-			if i == lineMarkStart then
-				f = columnMarkStart
-			end
-			if i == lineMarkEnd then
-				p = columnPastMarkEnd
-			end
-			renderer.renderLine(buffer, i, lines[i], f, p)
-		end
+
+	if elliMiddle > 0 then
+		renderer.renderLine(buffer, V_ELLIPSIS)
 	end
+
+	for i = first2, past2 - 1 do
+		local f, p
+		if i == lineMarkStart then
+			f = columnMarkStart
+		end
+		if i == lineMarkEnd then
+			p = columnPastMarkEnd
+		end
+		renderer.renderLine(buffer, i, lines[i], f, p)
+	end
+
+	if elliEnd > 0 then
+		renderer.renderLine(buffer, V_ELLIPSIS)
+	end
+
 end
 
 for _ = 1, LINES do

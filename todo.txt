@@ -1,2 +1,0 @@
-iterate through commands and make them reversible
-generate grammar from grammar text file

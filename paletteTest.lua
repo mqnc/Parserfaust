@@ -65,7 +65,7 @@ for y = 0, ny - 1 do
 		else
 			fg = {255, 255, 255}
 		end
-		txt:from(i):take(1):bg(bg):fg(fg)
+		txt:range(i, i + 1):bg(bg):fg(fg)
 	end
 end
 print(txt)

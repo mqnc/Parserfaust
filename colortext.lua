@@ -40,14 +40,6 @@ colorTextMt = {
 		return result
 	end,
 
-	from = function(self, from)
-		return self:range(from, self.viewLen)
-	end,
-
-	take = function(self, len)
-		return self:range(1, 1 + len)
-	end,
-
 	__index = function(self, index)
 		return self.range(index, index + 1)
 	end,
