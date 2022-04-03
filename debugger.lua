@@ -7,21 +7,21 @@ local colorSpace = require "colorspace"
 
 local FG_COLOR_SELECTED = {0, 64, 255}
 local BG_COLOR_SELECTED = {255, 255, 255}
-local FG_COLOR_ACCEPTED = {0, 128, 0}
+local FG_COLOR_ACCEPTED = {0, 64, 0}
 local BG_COLOR_ACCEPTED = {128, 255, 160}
-local FG_COLOR_REJECTED = {192, 0, 0}
+local FG_COLOR_REJECTED = {96, 0, 0}
 local BG_COLOR_REJECTED = {255, 160, 160}
 
-local stack = {}
 local breakPoint = function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)
 	return true
 end
 
 local processUserInput = function()
 
-	::redo::
+	::retry::
 	io.write("break if: ")
 	local userInput = io.read()
+	print("\n\n")
 
 	-- if true then
 	-- 	return
@@ -42,7 +42,7 @@ local processUserInput = function()
 		if breakPointFactory == nil then
 			print(code)
 			print(err)
-			goto redo
+			goto retry -- oh yes I did
 		else
 			breakPoint = breakPointFactory()
 		end
@@ -54,9 +54,9 @@ local paletteCache = {}
 
 local function palette(i)
 	if paletteCache[i] == nil then
-		local lumi = 0.5 + (i % 2) * 0.1
+		local lumi = 0.5 + ((i + 1) % 2) * 0.1
 		local chroma = 0.2
-		local hue = i * phi * 2 * math.pi + 2
+		local hue = i * phi * 2 * math.pi
 		paletteCache[i] = { --
 			colorSpace.RGB_to_sRGB( --
 			colorSpace.OKLab_to_RGB( --
@@ -66,8 +66,7 @@ local function palette(i)
 	return paletteCache[i]
 end
 
-local renderStack = function(buffer, matchLen)
-	local stack = stack
+local renderStack = function(buffer, stack, matchLen)
 
 	local highlighted = stack[#stack].op
 	local highlightTag = {"highlight"}
@@ -141,7 +140,7 @@ local renderStack = function(buffer, matchLen)
 
 end
 
-local renderSnapshot = function(src, matchLen)
+local renderSnapshot = function(src, matchLen, stack)
 
 	local pos = stack[#stack].pos
 
@@ -170,7 +169,7 @@ local renderSnapshot = function(src, matchLen)
 	local buffer = {}
 	dsp.render(buffer, cText, pos, past)
 	dsp.renderSeparator(buffer)
-	renderStack(buffer, matchLen)
+	renderStack(buffer, stack, matchLen)
 	io.write(table.concat(buffer))
 
 end
@@ -199,20 +198,25 @@ local lnCol = function(src, pos)
 	return table.unpack(lnColCache[src][pos])
 end
 
-local step = 0
+local state = {}
+state.stack = {}
+state.step = 0
+state.furthest = {step = 0, pos = 0, len = 0, stack = {}}
+
 _G.installDebugHooks = function(op)
 	local parse = op.parse
 	op.parse = function(src, pos, ctx)
+
 		pos = pos or 1
 
-		table.insert(stack, {op = op, pos = pos, ctx = ctx})
+		table.insert(state.stack, {op = op, pos = pos, ctx = ctx})
 
 		local ref = nil
 		local inside = {}
 		if op.__type[2] == "Reference" then
 			ref = op.ruleName
 		end
-		for _, layer in ipairs(stack) do
+		for _, layer in ipairs(state.stack) do
 			if layer.op.__type[2] == "Reference" then
 				inside[layer.op.ruleName] = true
 			end
@@ -220,20 +224,36 @@ _G.installDebugHooks = function(op)
 
 		local ln, col = lnCol(src, pos)
 
-		local function info()
-			io.write("⏵" .. tostring(step) .. -- 
+		local function info(step, pos, msg)
+			local ln, col = lnCol(src, pos)
+			io.write("⏵" .. tostring(step) .. --
 			" @" .. tostring(pos) .. --
 			" (" .. tostring(ln) .. ":" .. tostring(col) .. "); ")
+			if msg then
+				print(msg)
+			end
 		end
 
-		step = step + 1
-		if breakPoint(step, src, pos, ln, col, ctx, stack, inside, ref, nil, nil) then
-			renderSnapshot(src)
-			info()
+		state.step = state.step + 1
+		if breakPoint(state.step, src, pos, ln, col, ctx, --
+		state.stack, inside, ref, nil, nil) then
+			renderSnapshot(src, nil, state.stack)
+			info(state.step, pos)
 			processUserInput()
 		end
 
 		local len, vals = parse(src, pos, ctx)
+
+		if pos >= state.furthest.pos then
+			state.furthest.step = state.step
+			state.furthest.pos = pos
+			state.furthest.len = len
+			state.furthest.stack = {}
+			for _, layer in ipairs(state.stack) do
+				table.insert(state.furthest.stack, --
+				{op = layer.op, pos = layer.pos})
+			end
+		end
 
 		local match
 		if len == opf.Rejected then
@@ -242,14 +262,38 @@ _G.installDebugHooks = function(op)
 			match = string.sub(src, pos, pos + len - 1)
 		end
 
-		step = step + 1
-		if breakPoint(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals) then
-			renderSnapshot(src, len)
-			info()
+		state.step = state.step + 1
+		if breakPoint(state.step, src, pos, ln, col, ctx, --
+		state.stack, inside, ref, match, vals) then
+			renderSnapshot(src, len, state.stack)
+			info(state.step, pos)
 			processUserInput()
 		end
 
-		table.remove(stack)
+		table.remove(state.stack)
+
+		if #state.stack == 0 then
+			if len == #src then
+				renderSnapshot(src, len, {{op = op, pos = pos}})
+				info(state.step, pos, --
+				colorText("Successfully parsed complete input!") --
+				:fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED))
+			elseif len ~= opf.Rejected then
+				renderSnapshot(colorText(src)--
+				:fg(BG_COLOR_REJECTED):bg(FG_COLOR_REJECTED),-- 
+				len, {{op = op, pos = pos}})
+				info(state.step, pos, --
+				colorText("Successfully parsed part")--
+				:fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED)
+				..colorText(" of input.")--
+				:fg(BG_COLOR_REJECTED):bg(FG_COLOR_REJECTED))
+			else
+				renderSnapshot(src, state.furthest.len, state.furthest.stack)
+				info(state.furthest.step, state.furthest.pos, --
+				colorText("Parsing failed! See furthest advancement above.") --
+				:fg(FG_COLOR_REJECTED):bg(BG_COLOR_REJECTED))
+			end
+		end
 
 		return len, vals
 	end

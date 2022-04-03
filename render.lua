@@ -65,11 +65,11 @@ local combineViews = function(inputLen, -- complete length of input text
 	end
 
 	local first1 = math.max(focus1 - offset1, 1)
-	local past1 = math.min(first1 + window1, inputLen)
+	local past1 = math.min(first1 + window1, 1 + inputLen)
 	first1 = math.max(past1 - window1, 1)
 
 	local first2 = math.max(focus2 - offset2, 1)
-	local past2 = math.min(first2 + window2, inputLen)
+	local past2 = math.min(first2 + window2, 1 + inputLen)
 	first2 = math.max(past2 - window2, 1)
 
 	local firstFirst = math.min(first1, first2)
@@ -270,10 +270,6 @@ renderer.render = function(buffer, colTxt, markFirst, markPast)
 		renderer.renderLine(buffer, V_ELLIPSIS)
 	end
 
-end
-
-for _ = 1, LINES do
-	print(colorText("\n"))
 end
 
 return renderer
