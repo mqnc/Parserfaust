@@ -3,7 +3,6 @@ local opf = require "opfactory"
 
 return function()
 
-	local Ref = opf.makeReference
 	local Lit = opf.makeLiteral
 	local Rng = opf.makeRange
 	local Any = opf.makeAny
@@ -56,6 +55,27 @@ return function()
 		end)
 	end
 
+	-- recursively concatenate all strings within arguments
+	local DeepJoin = function(op)
+		local function flatten(buffer, t)
+			if t == opf.Empty then
+				return
+			elseif type(t) == "string" then
+				table.insert(buffer, t)
+			elseif type(t) == "table" then
+				for _, v in ipairs(t) do
+					flatten(buffer, v)
+				end
+			end
+		end
+
+		return Act(op, function(args)
+			local buffer = {}
+			flatten(buffer, args.vals)
+			return table.concat(buffer)
+		end)
+	end
+
 	local DEBUG = function(op)
 		return Act(op, function(args)
 			print(inspect(args))
@@ -63,18 +83,7 @@ return function()
 		end)
 	end
 
-	local pegRules = {}
-
-	-- grammar construction helper
-	local g = {}
-	setmetatable(g, {
-		__index = function(t, k)
-			return Ref(pegRules, k)
-		end,
-		__newindex = function(t, k, v)
-			pegRules[k] = v
-		end
-	})
+	local g = opf.makeGrammar()
 
 	-- # Hierarchical syntax
 
@@ -82,17 +91,15 @@ return function()
 	g.Grammar = Ctx( --
 	Act(Pick(2, Seq(g.Spacing, Oom(g.Definition), g.EndOfFile)), --
 	function(args)
-		local start = args.vals[1].ruleName
-		for _, val in pairs(args.vals) do
-			args.ctx.rules[val.ruleName] = val.op
-		end
-		return Ref(args.ctx.rules, start)
-	end), {rules = {}})
+		return args.ctx.grammar
+	end), {grammar = opf.makeGrammar()})
 
 	-- Definition <- Identifier LEFTARROW Expression
 	g.Definition = Act(Seq(g.Identifier, g.LEFTARROW, g.Expression), --
 	function(args)
-		return {ruleName = args.vals[1], op = args.vals[3]}
+		local name = args.vals[1]
+		local op = args.vals[3]
+		args.ctx.grammar[name] = op
 	end)
 
 	-- Expression <- Sequence (SLASH Sequence)*
@@ -162,7 +169,7 @@ return function()
 	function(args)
 		local choice, val = next(args.vals)
 		if choice == 1 then
-			return Ref(args.ctx.rules, val)
+			return args.ctx.grammar[val]
 		elseif choice == 5 then
 			return Any()
 		else
@@ -184,8 +191,8 @@ return function()
 	-- Literal <- ['] (!['] Char)* ['] Spacing
 	--          / ["] (!["] Char)* ["] Spacing
 	g.Literal = Act(fCho( --
-	Pick(2, Seq(Rng("'"), Match(Zom(Seq(Not(Rng("'")), g.Char))), Rng("'"), g.Spacing)), --
-	Pick(2, Seq(Rng('"'), Match(Zom(Seq(Not(Rng('"')), g.Char))), Rng('"'), g.Spacing)) --
+	Pick(2, Seq(Rng("'"), DeepJoin(Zom(Seq(Not(Rng("'")), g.Char))), Rng("'"), g.Spacing)), --
+	Pick(2, Seq(Rng('"'), DeepJoin(Zom(Seq(Not(Rng('"')), g.Char))), Rng('"'), g.Spacing)) --
 	), function(args)
 		return Lit(args.vals)
 	end)
@@ -214,7 +221,7 @@ return function()
 	--       / '\\' [0-2][0-7][0-7]
 	--       / '\\' [0-7][0-7]?
 	--       / !'\\' .
-	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo and should be 3)
+	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo and should be 377 but who am I)
 	g.Char = fCho(g.Escape, g.Octal, g.SimpleChar)
 	g.Escape = Act(Seq(Lit("\\"), Cho( --
 	Rng("n"), Rng("r"), Rng("t"), Rng("'"), --
@@ -281,5 +288,5 @@ return function()
 	-- EndOfFile <- !.
 	g.EndOfFile = Not(Any())
 
-	return g.Grammar
+	return g
 end

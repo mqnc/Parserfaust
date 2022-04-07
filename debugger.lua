@@ -198,14 +198,33 @@ local lnCol = function(src, pos)
 	return table.unpack(lnColCache[src][pos])
 end
 
-local state = {}
-state.stack = {}
-state.step = 0
-state.furthest = {step = 0, pos = 0, len = 0, stack = {}}
+local state
+
+local initState = function()
+	assert(state == nil)
+	state = { --
+		stack = {},
+		step = 0,
+		furthest = { --
+			stack = {},
+			step = 0,
+			pos = 0,
+			len = 0
+		}
+	}
+end
+
+local cleanupState = function()
+	state = nil
+end
 
 _G.installDebugHooks = function(op)
 	local parse = op.parse
 	op.parse = function(src, pos, ctx)
+
+		if state == nil then
+			initState()
+		end
 
 		pos = pos or 1
 
@@ -279,13 +298,12 @@ _G.installDebugHooks = function(op)
 				colorText("Successfully parsed complete input!") --
 				:fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED))
 			elseif len ~= opf.Rejected then
-				renderSnapshot(colorText(src)--
-				:fg(BG_COLOR_REJECTED):bg(FG_COLOR_REJECTED),-- 
+				renderSnapshot(colorText(src) --
+				:fg(BG_COLOR_REJECTED):bg(FG_COLOR_REJECTED), -- 
 				len, {{op = op, pos = pos}})
 				info(state.step, pos, --
-				colorText("Successfully parsed part")--
-				:fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED)
-				..colorText(" of input.")--
+				colorText("Successfully parsed part") --
+				:fg(FG_COLOR_ACCEPTED):bg(BG_COLOR_ACCEPTED) .. colorText(" of input.") --
 				:fg(BG_COLOR_REJECTED):bg(FG_COLOR_REJECTED))
 			else
 				renderSnapshot(src, state.furthest.len, state.furthest.stack)
@@ -293,6 +311,8 @@ _G.installDebugHooks = function(op)
 				colorText("Parsing failed! See furthest advancement above.") --
 				:fg(FG_COLOR_REJECTED):bg(BG_COLOR_REJECTED))
 			end
+
+			cleanupState()
 		end
 
 		return len, vals

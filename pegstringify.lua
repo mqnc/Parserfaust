@@ -35,16 +35,21 @@ local stringifyRule = function(rule, opDecorator)
 	local formatters = {}
 
 	local format = function(op)
-		local formatted = formatters[op.__type[#op.__type]](op)
+		local formatted
+		local name = op.getRuleName()
+		if op ~= rule and name then
+			formatted = op.getRuleName()
+		elseif name then
+			formatted = name .. " <- " --
+			.. formatters[op.__type[#op.__type]](op)
+		else
+			formatted = formatters[op.__type[#op.__type]](op)
+		end
 		return opDecorator(op, formatted)
 	end
 
 	formatters.Reference = function(op)
-		-- if op == rule then -- top level is reference, expand
-		-- 	return op.ruleName .. " <- " .. format(op.getChild())
-		-- else
-		return op.ruleName
-		-- end
+		return format(op.getChild())
 	end
 
 	formatters.Literal = function(op)
@@ -124,31 +129,46 @@ local stringifyRule = function(rule, opDecorator)
 	return format(rule)
 end
 
-local stringifyGrammar = function(start, opDecorator)
-	if opDecorator == nil then
-		opDecorator = function(op, formatted)
-			return formatted
-		end
+local stringifyGrammar = function(grammar, opDecorator)
+
+	-- this simple version can get stuck in loops
+	-- if operators without ids are each other's parents
+
+	local ruleStrings={}
+
+	for _, op in pairs(grammar) do
+		table.insert(ruleStrings,stringifyRule(op, opDecorator))
 	end
 
-	local processed = {}
+	return ruleStrings
 
-	local scan
-	scan = function(op)
-		if processed[op] == nil then
-			processed[op] = false
-			for _, child in ipairs(op.getChildren()) do
-				scan(child)
-			end
-		end
-	end
+	-- I was too lazy to complete this complicated version tho
+
+
+	-- if opDecorator == nil then
+	-- 	opDecorator = function(op, formatted)
+	-- 		return formatted
+	-- 	end
+	-- end
+
+	-- local processed = {}
+
+	-- local scan
+	-- scan = function(op)
+	-- 	if processed[op] == nil then
+	-- 		processed[op] = false
+	-- 		for _, child in ipairs(op.getChildren()) do
+	-- 			scan(child)
+	-- 		end
+	-- 	end
+	-- end
+
+	-- scan()
 
 	-- local result = {}
 
 	-- if start.__type[2] == "Reference" then
-	-- 	format(start)
-	-- else
-	-- 	table.insert(result, format(start))
+	-- 	table.insert(result, stringifyRule(start))
 	-- end
 
 	-- while true do

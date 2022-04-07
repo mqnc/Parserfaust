@@ -22,41 +22,52 @@ end
 
 opf.makeOperator = function()
 	local children = {}
+	local ruleName
 
-	return {
-		__type = {"Operator"},
+	local op = {}
 
-		setChild = function(c)
+	op.__type = {"Operator"}
+
+	op.fixRuleName = function(name)
+		assert(ruleName == nil)
+		ruleName = name
+	end
+
+	op.getRuleName = function()
+		return ruleName
+	end
+
+	op.setChild = function(c)
+		assert(c.__type[1] == "Operator")
+		children = {c}
+	end
+
+	op.setChildren = function(cs)
+		assert(type(cs) == "table")
+		for _, c in ipairs(cs) do
 			assert(c.__type[1] == "Operator")
-			children = {c}
-		end,
-
-		setChildren = function(cs)
-			assert(type(cs) == "table")
-			for _, c in ipairs(cs) do
-				assert(c.__type[1] == "Operator")
-			end
-			children = cs
-		end,
-
-		getChild = function()
-			assert(#children == 1)
-			return children[1]
-		end,
-
-		getChildren = function()
-			return children
-		end,
-
-		parse = function(src, pos, ctx)
-			error("parse function not defined")
 		end
-	}
+		children = cs
+	end
+
+	op.getChild = function()
+		assert(#children == 1)
+		return children[1]
+	end
+
+	op.getChildren = function()
+		return children
+	end
+
+	op.parse = function(src, pos, ctx)
+		error("parse function not defined")
+	end
+
+	return op
 end
 
-opf.makeReference = function(ruleTable, ruleName)
+local makeReference = function(ruleTable, ruleName)
 	assert(type(ruleTable) == "table")
-	assert(type(ruleName) == "string")
 
 	local op = opf.makeOperator()
 	table.insert(op.__type, "Reference")
@@ -91,6 +102,55 @@ opf.makeReference = function(ruleTable, ruleName)
 	end
 
 	return _G.installDebugHooks(op)
+end
+
+opf.makeGrammar = function()
+	local rules = {}
+	local ordered = {}
+	local grammar = {}
+
+	grammar.__type = {"Grammar"}
+
+	setmetatable(grammar, {
+
+		__index = function(_, key)
+			return makeReference(rules, key)
+		end,
+
+		__newindex = function(_, rule, op)
+			if op == nil then
+				rules[rule] = nil
+				for i, v in ipairs(ordered) do
+					if v == rule then
+						table.remove(ordered, i)
+						break
+					end
+				end
+			end
+			if op.getRuleName() == nil then
+				op.fixRuleName(rule)
+			end
+			assert(op.getRuleName() == rule)
+			if rules[rule] == nil then
+				table.insert(ordered, rule)
+			end
+			rules[rule] = op
+		end,
+
+		__pairs = function()
+			local i = 0
+			local function iter()
+				i = i + 1
+				local ruleName = ordered[i]
+				if ruleName then
+					return ruleName, rules[ruleName]
+				end
+			end
+			return iter
+		end
+	})
+
+	return grammar
 end
 
 opf.makeLiteral = function(str)
