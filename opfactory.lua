@@ -6,9 +6,6 @@ end
 
 local opf = {}
 
-local function capture(...)
-end -- for capturing variables as upvalues for debugging
-
 opf.Empty = {"empty"} -- used for empty slots in arrays
 opf.Rejected = {"rejected"}
 
@@ -94,7 +91,6 @@ local makeReference = function(ruleTable, ruleName)
 	end
 
 	op.parse = function(src, pos, ctx)
-		capture(op)
 		if pos == nil then
 			pos = 1
 		end
@@ -165,12 +161,10 @@ opf.makeLiteral = function(str)
 
 	if str == "" then
 		op.parse = function()
-			capture(op)
 			return 0
 		end
 	else
 		op.parse = function(src, pos, ctx)
-			capture(op)
 			if src:sub(pos, pos + #str - 1) == str then
 				return #str
 			else
@@ -198,12 +192,10 @@ opf.makeRange = function(from, to)
 
 	if from == nil and to == nil then
 		op.parse = function()
-			capture(op)
 			return opf.Rejected
 		end
 	else
 		op.parse = function(src, pos, ctx)
-			capture(op)
 			local c = src:sub(pos, pos)
 			if from <= c and c <= to then
 				return 1
@@ -221,7 +213,6 @@ opf.makeAny = function()
 	table.insert(op.__type, "Any")
 
 	op.parse = function(src, pos, ctx)
-		capture(op)
 		if pos > #src then
 			return opf.Rejected
 		else
@@ -255,7 +246,6 @@ opf.makeRepetition = function(expr, min, max)
 	end
 
 	op.parse = function(src, pos, ctx)
-		capture(op)
 		local totalLen = 0
 		local vals = {}
 		for i = 1, max do
@@ -297,7 +287,6 @@ opf.makeLookAhead = function(expr, isPositive)
 	end
 
 	op.parse = function(src, pos, ctx)
-		capture(op)
 		local len = op.getChild().parse(src, pos, ctx)
 		if (len ~= opf.Rejected) == isPositive then
 			return 0
