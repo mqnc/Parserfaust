@@ -10,15 +10,15 @@ local V_ELLIPSIS = "⋮"
 local V_ELLIPSIS_HEIGHT = 1
 local LINES_AROUND_HIGHLIGHT_PAST = LINES // 3
 local LINES_BEFORE_HIGHLIGHT_PAST = LINES_AROUND_HIGHLIGHT_PAST // 2
-local LINE_SEPARATOR = --
-string.rep("─", COLUMNS_LINE_NUMBER) .. "┼" --
+local LINE_SEPARATOR =
+string.rep("─", COLUMNS_LINE_NUMBER) .. "┼"
 .. string.rep("─", COLUMNS - COLUMNS_LINE_NUMBER - 1)
 local LINE_SEPARATOR_HEIGHT = 1
 local LINES_INPUT = 1
-local LINES_STACK = LINES --
-- LINES_AROUND_HIGHLIGHT_FIRST --
-- LINES_AROUND_HIGHLIGHT_PAST --
-- LINE_SEPARATOR_HEIGHT --
+local LINES_STACK = LINES
+- LINES_AROUND_HIGHLIGHT_FIRST
+- LINES_AROUND_HIGHLIGHT_PAST
+- LINE_SEPARATOR_HEIGHT
 - LINES_INPUT
 
 local COLUMN_SEPARATOR = "│"
@@ -27,19 +27,19 @@ local COLUMNS_AROUND_HIGHLIGHT_FIRST = COLUMNS // 3
 local COLUMNS_BEFORE_HIGHLIGHT_FIRST = COLUMNS_AROUND_HIGHLIGHT_FIRST // 3
 local H_ELLIPSIS = colorText("…"):bg({128, 128, 128}):fg({255, 255, 0})
 local H_ELLIPSIS_WHIDTH = #H_ELLIPSIS
-local COLUMNS_AROUND_HIGHLIGHT_PAST = COLUMNS --
-- COLUMNS_LINE_NUMBER --
-- COLUMN_SEPARATOR_WIDTH --
-- COLUMNS_AROUND_HIGHLIGHT_FIRST --
+local COLUMNS_AROUND_HIGHLIGHT_PAST = COLUMNS
+- COLUMNS_LINE_NUMBER
+- COLUMN_SEPARATOR_WIDTH
+- COLUMNS_AROUND_HIGHLIGHT_FIRST
 local COLUMNS_BEFORE_HIGHLIGHT_PAST = COLUMNS_AROUND_HIGHLIGHT_PAST // 2
 
 local renderer = {}
 
-local clamp = function(val, min, max)
+local function clamp(val, min, max)
 	return math.min(math.max(val, min), max)
 end
 
-local combineViews = function(inputLen, -- complete length of input text
+local function combineViews(inputLen, -- complete length of input text
 		focus1, -- first important position
 		window1, -- size of window around focus1
 		offset1, -- position of focus1 in window1
@@ -88,7 +88,7 @@ local combineViews = function(inputLen, -- complete length of input text
 		local elliEnd = (lastPast ~= 1 + inputLen) and ellipsis or 0
 		lastPast = lastPast - elliEnd
 
-		assert(elliStart + (lastPast - firstFirst) + elliEnd --
+		assert(elliStart + (lastPast - firstFirst) + elliEnd
 		== maxOutputLen)
 		assert(firstFirst - elliStart >= 1)
 		assert(lastPast + elliEnd <= 1 + inputLen)
@@ -103,8 +103,8 @@ local combineViews = function(inputLen, -- complete length of input text
 		local elliEnd = (lastPast ~= 1 + inputLen) and ellipsis or 0
 		lastPast = lastPast - elliEnd
 
-		assert(elliStart + (firstPast - firstFirst) + elliMiddle --
-		+ (lastPast - secondFirst) + elliEnd --
+		assert(elliStart + (firstPast - firstFirst) + elliMiddle
+		+ (lastPast - secondFirst) + elliEnd
 		== maxOutputLen)
 		assert(firstFirst - elliStart >= 1)
 		assert(lastPast + elliEnd <= 1 + inputLen)
@@ -114,7 +114,7 @@ local combineViews = function(inputLen, -- complete length of input text
 
 end
 
-local filterInPlace = function(colTxt)
+local function filterInPlace(colTxt)
 	local map = {["\t"] = "→", ["\r"] = "←", ["\n"] = "↵", [" "] = "·"}
 	for _, colChar in ipairs(colTxt.txt) do
 		local mapped = map[colChar.chr]
@@ -125,24 +125,24 @@ local filterInPlace = function(colTxt)
 	end
 end
 
-renderer.renderSeparator = function(buffer)
+function renderer.renderSeparator(buffer)
 	table.insert(buffer, tostring(LINE_SEPARATOR) .. "\n")
 end
 
-renderer.getNumColumns = function()
+function renderer.getNumColumns()
 	return COLUMNS
 end
 
-renderer.getNumStackLines = function()
+function renderer.getNumStackLines()
 	return LINES_STACK
 end
 
-renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast, fill)
+function renderer.renderLine(buffer, index, colTxt, markFirst, markPast, fill)
 
 	local lineNumber
 	if type(index) == "number" then
-		lineNumber = colorText( --
-		string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index)) --
+		lineNumber = colorText(
+		string.format("%" .. tostring(COLUMNS_LINE_NUMBER) .. "d", index))
 		:fg({255, 255, 0})
 	elseif type(index) == "string" then
 		lineNumber = colorText(string.rep(" ", COLUMNS_LINE_NUMBER - utf8.len(index)) .. index)
@@ -160,14 +160,14 @@ renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast, fill)
 
 	local adjustedWin1 = COLUMNS_AROUND_HIGHLIGHT_FIRST + COLUMNS_LINE_NUMBER - #lineNumber
 
-	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd = --
-	combineViews(#colTxt, --
-	markFirst, --
-	adjustedWin1, --
-	COLUMNS_BEFORE_HIGHLIGHT_FIRST, --
-	H_ELLIPSIS_WHIDTH, --
-	markPast, --
-	COLUMNS_AROUND_HIGHLIGHT_PAST, --
+	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd =
+	combineViews(#colTxt,
+	markFirst,
+	adjustedWin1,
+	COLUMNS_BEFORE_HIGHLIGHT_FIRST,
+	H_ELLIPSIS_WHIDTH,
+	markPast,
+	COLUMNS_AROUND_HIGHLIGHT_PAST,
 	COLUMNS_BEFORE_HIGHLIGHT_PAST)
 
 	if elliStart > 0 then
@@ -187,8 +187,8 @@ renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast, fill)
 	end
 
 	if fill then
-		local spacer = string.rep(" ", --
-		COLUMNS - #lineNumber - COLUMN_SEPARATOR_WIDTH - elliStart - #part1 --
+		local spacer = string.rep(" ",
+		COLUMNS - #lineNumber - COLUMN_SEPARATOR_WIDTH - elliStart - #part1
 		- elliMiddle - #part2 - elliEnd)
 		table.insert(buffer, tostring(colorText(spacer):bg(fill)))
 	end
@@ -196,7 +196,7 @@ renderer.renderLine = function(buffer, index, colTxt, markFirst, markPast, fill)
 	table.insert(buffer, "\n")
 end
 
-renderer.render = function(buffer, colTxt, markFirst, markPast)
+function renderer.render(buffer, colTxt, markFirst, markPast)
 
 	colTxt = colorText(colTxt)
 
@@ -226,14 +226,14 @@ renderer.render = function(buffer, colTxt, markFirst, markPast)
 		lineMarkEnd = 1 + #lines
 	end
 
-	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd = --
-	combineViews(#lines, --
-	lineMarkStart, --
-	LINES_AROUND_HIGHLIGHT_FIRST, --
-	LINES_BEFORE_HIGHLIGHT_FIRST, --
-	V_ELLIPSIS_HEIGHT, --
-	lineMarkEnd + 1, --
-	LINES_AROUND_HIGHLIGHT_PAST, --
+	local elliStart, first1, past1, elliMiddle, first2, past2, elliEnd =
+	combineViews(#lines,
+	lineMarkStart,
+	LINES_AROUND_HIGHLIGHT_FIRST,
+	LINES_BEFORE_HIGHLIGHT_FIRST,
+	V_ELLIPSIS_HEIGHT,
+	lineMarkEnd + 1,
+	LINES_AROUND_HIGHLIGHT_PAST,
 	LINES_BEFORE_HIGHLIGHT_PAST)
 
 	if elliStart > 0 then

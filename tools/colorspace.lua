@@ -21,35 +21,16 @@ function colorSpace.RGB_to_sRGB(R, G, B)
 	return table.unpack(sRGB)
 end
 
-function colorSpace.XYZ_to_RGB(X, Y, Z)
-	-- https://en.wikipedia.org/wiki/SRGB#From_CIE_XYZ_to_sRGB
-
-	local R = 3.2406 * X - 1.5372 * Y - 0.4986 * Z
-	local G = -0.9689 * X + 1.8758 * Y + 0.0415 * Z
-	local B = 0.0557 * X - 0.2040 * Y + 1.0570 * Z
-
-	return R, G, B
-end
-
-function colorSpace.xyY_to_XYZ(x, y, Y)
-	-- https://en.wikipedia.org/wiki/CIE_1931_color_space#CIE_xy_chromaticity_diagram_and_the_CIE_xyY_color_space
-
-	local X = Y / y * x
-	local Z = Y / y * (1 - x - y)
-
-	return X, Y, Z
-end
-
 function colorSpace.OKLab_to_RGB(L, a, b)
 	-- https://bottosson.github.io/posts/oklab/
 
-	local l_ = L + 0.3963377774 * a + 0.2158037573 * b;
-	local m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-	local s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+	local l_ = L + 0.3963377774 * a + 0.2158037573 * b
+	local m_ = L - 0.1055613458 * a - 0.0638541728 * b
+	local s_ = L - 0.0894841775 * a - 1.2914855480 * b
 
-	local l = l_ * l_ * l_;
-	local m = m_ * m_ * m_;
-	local s = s_ * s_ * s_;
+	local l = l_ * l_ * l_
+	local m = m_ * m_ * m_
+	local s = s_ * s_ * s_
 
 	local R = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
 	local G = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s

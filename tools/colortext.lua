@@ -4,20 +4,20 @@ local DEFAULT_BG_COLOR = {0, 0, 0}
 local colorText
 local colorTextMt
 
-local isColorTxt = function(txt)
+local function isColorTxt(txt)
 	return type(txt) == "table" and getmetatable(txt) == colorTextMt
 end
 
 colorTextMt = {
 
 	clone = function(self)
-		local result = { --
+		local result = {
 			txt = {},
 			viewPos = self.viewPos,
 			viewLen = self.viewLen
 		}
 		for _, char in ipairs(self.txt) do
-			table.insert(result.txt, { --
+			table.insert(result.txt, {
 				chr = char.chr,
 				fg = char.fg,
 				bg = char.bg,
@@ -31,7 +31,7 @@ colorTextMt = {
 	range = function(self, first, past)
 		assert(first >= 1 and first <= 1 + self.viewLen)
 		assert(past >= first and past <= 1 + self.viewLen)
-		local result = { --
+		local result = {
 			txt = self.txt,
 			viewPos = self.viewPos + first - 1,
 			viewLen = past - first
@@ -73,7 +73,7 @@ colorTextMt = {
 
 		local result = {}
 
-		local ansiSeq = function(sgr, rgb)
+		local function ansiSeq(sgr, rgb)
 			return table.concat({"\027[", sgr, ";2;", table.concat(rgb, ";"), "m"})
 		end
 
@@ -132,7 +132,7 @@ colorText = function(txt)
 	local result = {txt = {}}
 	setmetatable(result, colorTextMt)
 	for i = 1, utf8.len(txt) do
-		table.insert(result.txt, { --
+		table.insert(result.txt, {
 			chr = txt:sub(utf8.offset(txt, i), utf8.offset(txt, i + 1) - 1)
 		})
 	end

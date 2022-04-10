@@ -14,27 +14,27 @@ return function()
 	local Act = opf.makeAction
 
 	-- zero or more
-	local Zom = function(op)
+	local function Zom(op)
 		return Rep(op, 0, math.huge)
 	end
 
 	-- one or more
-	local Oom = function(op)
+	local function Oom(op)
 		return Rep(op, 1, math.huge)
 	end
 
 	-- optional
-	local Opt = function(op)
+	local function Opt(op)
 		return Rep(op, 0, 1)
 	end
 
 	-- negative look ahead
-	local Not = function(op)
+	local function Not(op)
 		return And(op, false)
 	end
 
 	-- forward chosen, ignoring index
-	local fCho = function(...)
+	local function fCho(...)
 		return Act(Cho(...), function(args)
 			local index, value = next(args.vals)
 			return value
@@ -42,21 +42,21 @@ return function()
 	end
 
 	-- just forward matched string
-	local Match = function(op)
+	local function Match(op)
 		return Act(op, function(args)
 			return args.src:sub(args.pos, args.pos + args.len - 1)
 		end)
 	end
 
 	-- pick an item from a sequence
-	local Pick = function(index, seq)
+	local function Pick(index, seq)
 		return Act(seq, function(args)
 			return args.vals[index]
 		end)
 	end
 
 	-- recursively concatenate all strings within arguments
-	local DeepJoin = function(op)
+	local function DeepJoin(op)
 		local function flatten(buffer, t)
 			if t == opf.Empty then
 				return
@@ -76,7 +76,7 @@ return function()
 		end)
 	end
 
-	local DEBUG = function(op)
+	local function DEBUG(op)
 		return Act(op, function(args)
 			print(inspect(args))
 			return args.vals
@@ -88,14 +88,14 @@ return function()
 	-- # Hierarchical syntax
 
 	-- Grammar <- Spacing Definition+ EndOfFile
-	g.Grammar = Ctx( --
-	Act(Pick(2, Seq(g.Spacing, Oom(g.Definition), g.EndOfFile)), --
+	g.Grammar = Ctx(
+	Act(Pick(2, Seq(g.Spacing, Oom(g.Definition), g.EndOfFile)),
 	function(args)
 		return args.ctx.grammar
 	end), {grammar = opf.makeGrammar()})
 
 	-- Definition <- Identifier LEFTARROW Expression
-	g.Definition = Act(Seq(g.Identifier, g.LEFTARROW, g.Expression), --
+	g.Definition = Act(Seq(g.Identifier, g.LEFTARROW, g.Expression),
 	function(args)
 		local name = args.vals[1]
 		local op = args.vals[3]
@@ -103,7 +103,7 @@ return function()
 	end)
 
 	-- Expression <- Sequence (SLASH Sequence)*
-	g.Expression = Act(Seq(g.Sequence, Zom(Pick(2, Seq(g.SLASH, g.Sequence)))), --
+	g.Expression = Act(Seq(g.Sequence, Zom(Pick(2, Seq(g.SLASH, g.Sequence)))),
 	function(args)
 		local choices = {}
 		if args.vals[1].__type then
@@ -118,13 +118,13 @@ return function()
 	end)
 
 	-- Sequence <- Prefix*
-	g.Sequence = Act(Zom(g.Prefix), --
+	g.Sequence = Act(Zom(g.Prefix),
 	function(args)
 		return Seq(table.unpack(args.vals))
 	end)
 
 	-- Prefix <- (AND / NOT)? Suffix
-	g.Prefix = Act(Seq(Opt(Cho(g.AND, g.NOT)), g.Suffix), --
+	g.Prefix = Act(Seq(Opt(Cho(g.AND, g.NOT)), g.Suffix),
 	function(args)
 		local pref = args.vals[1]
 		local suff = args.vals[2]
@@ -141,7 +141,7 @@ return function()
 	end)
 
 	-- Suffix <- Primary (QUESTION / STAR / PLUS)?
-	g.Suffix = Act(Seq(g.Primary, Opt(Cho(g.QUESTION, g.STAR, g.PLUS))), --
+	g.Suffix = Act(Seq(g.Primary, Opt(Cho(g.QUESTION, g.STAR, g.PLUS))),
 	function(args)
 		local prim = args.vals[1]
 		local suff = args.vals[2]
@@ -162,10 +162,10 @@ return function()
 	-- Primary <- Identifier !LEFTARROW
 	--          / OPEN Expression CLOSE
 	--          / Literal / Class / DOT
-	g.Primary = Act(Cho( --
-	Pick(1, Seq(g.Identifier, Not(g.LEFTARROW))), --
-	Pick(2, Seq(g.OPEN, g.Expression, g.CLOSE)), --
-	g.Literal, g.Class, g.DOT), --
+	g.Primary = Act(Cho(
+	Pick(1, Seq(g.Identifier, Not(g.LEFTARROW))),
+	Pick(2, Seq(g.OPEN, g.Expression, g.CLOSE)),
+	g.Literal, g.Class, g.DOT),
 	function(args)
 		local choice, val = next(args.vals)
 		if choice == 1 then
@@ -190,24 +190,24 @@ return function()
 
 	-- Literal <- ['] (!['] Char)* ['] Spacing
 	--          / ["] (!["] Char)* ["] Spacing
-	g.Literal = Act(fCho( --
-	Pick(2, Seq(Rng("'"), DeepJoin(Zom(Seq(Not(Rng("'")), g.Char))), Rng("'"), g.Spacing)), --
-	Pick(2, Seq(Rng('"'), DeepJoin(Zom(Seq(Not(Rng('"')), g.Char))), Rng('"'), g.Spacing)) --
+	g.Literal = Act(fCho(
+	Pick(2, Seq(Rng("'"), DeepJoin(Zom(Seq(Not(Rng("'")), g.Char))), Rng("'"), g.Spacing)),
+	Pick(2, Seq(Rng('"'), DeepJoin(Zom(Seq(Not(Rng('"')), g.Char))), Rng('"'), g.Spacing))
 	), function(args)
 		return Lit(args.vals)
 	end)
 
 	-- Class <- '[' (!']' Range)* ']' Spacing
-	g.Class = Act(Seq(Lit("["), --
-	Zom(Pick(2, Seq(Not(Lit("]")), g.Range))), --
-	Lit("]"), g.Spacing), --
+	g.Class = Act(Seq(Lit("["),
+	Zom(Pick(2, Seq(Not(Lit("]")), g.Range))),
+	Lit("]"), g.Spacing),
 	function(args)
 		local ranges = args.vals[2]
 		return Cho(table.unpack(ranges))
 	end)
 
 	-- Range <- Char '-' Char / Char
-	g.Range = Act(Cho(Seq(g.Char, Lit("-"), g.Char), g.Char), --
+	g.Range = Act(Cho(Seq(g.Char, Lit("-"), g.Char), g.Char),
 	function(args)
 		local choice, val = next(args.vals)
 		if choice == 1 then
@@ -223,9 +223,9 @@ return function()
 	--       / !'\\' .
 	-- # (original paper says [0-2][0-7][0-7] but I think it's a typo and should be 377 but who am I)
 	g.Char = fCho(g.Escape, g.Octal, g.SimpleChar)
-	g.Escape = Act(Seq(Lit("\\"), Cho( --
-	Rng("n"), Rng("r"), Rng("t"), Rng("'"), --
-	Rng('"'), Rng("["), Rng("]"), Rng("\\"))), --
+	g.Escape = Act(Seq(Lit("\\"), Cho(
+	Rng("n"), Rng("r"), Rng("t"), Rng("'"),
+	Rng('"'), Rng("["), Rng("]"), Rng("\\"))),
 	function(args)
 		local c = args.src:sub(args.pos + 1, args.pos + 1)
 		local map = {n = "\n", r = "\r", t = "\t"}
@@ -235,9 +235,9 @@ return function()
 			return c
 		end
 	end)
-	g.Octal = Act(Cho(Seq(Lit("\\"), Rng("0", "2"), Rng("0", "7"), Rng("0", "7")), --
-	Seq(Lit("\\"), Rng("0", "7"), Opt(Rng("0", "7"))) --
-	), --
+	g.Octal = Act(Cho(Seq(Lit("\\"), Rng("0", "2"), Rng("0", "7"), Rng("0", "7")),
+	Seq(Lit("\\"), Rng("0", "7"), Opt(Rng("0", "7")))
+	),
 	function(args)
 		return string.char(tonumber(args.src:sub(args.pos + 1, args.pos + args.len - 1), 8))
 	end)

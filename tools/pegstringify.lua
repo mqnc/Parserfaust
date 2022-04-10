@@ -21,11 +21,11 @@ for d2 = 0, 3 do
 	end
 end
 
-local escape = function(txt)
+local function escape(txt)
 	return (txt:gsub("([\0-\31\127-\255%\'%\"%[%]%\\])", pegEscapeMap))
 end
 
-local stringifyRule = function(rule, opDecorator)
+local function stringifyRule(rule, opDecorator)
 	if opDecorator == nil then
 		opDecorator = function(op, formatted)
 			return formatted
@@ -34,13 +34,13 @@ local stringifyRule = function(rule, opDecorator)
 
 	local formatters = {}
 
-	local format = function(op)
+	local function format(op)
 		local formatted
 		local name = op.getRuleName()
 		if op ~= rule and name then
 			formatted = op.getRuleName()
 		elseif name then
-			formatted = name .. " <- " --
+			formatted = name .. " <- "
 			.. formatters[op.__type[#op.__type]](op)
 		else
 			formatted = formatters[op.__type[#op.__type]](op)
@@ -48,15 +48,15 @@ local stringifyRule = function(rule, opDecorator)
 		return opDecorator(op, formatted)
 	end
 
-	formatters.Reference = function(op)
+	function formatters.Reference(op)
 		return format(op.getChild())
 	end
 
-	formatters.Literal = function(op)
+	function formatters.Literal(op)
 		return '"' .. escape(op.getString()) .. '"'
 	end
 
-	formatters.Range = function(op)
+	function formatters.Range(op)
 		local from, to = op.getFromTo()
 		if from == nil then
 			return "[]"
@@ -67,31 +67,31 @@ local stringifyRule = function(rule, opDecorator)
 		return '[' .. escape(from) .. '-' .. escape(to) .. ']'
 	end
 
-	formatters.Any = function(op)
+	function formatters.Any(op)
 		return '.'
 	end
 
-	formatters.Optional = function(op)
+	function formatters.Optional(op)
 		return '(' .. format(op.getChild()) .. ')?'
 	end
 
-	formatters.ZeroOrMore = function(op)
+	function formatters.ZeroOrMore(op)
 		return '(' .. format(op.getChild()) .. ')*'
 	end
 
-	formatters.OneOrMore = function(op)
+	function formatters.OneOrMore(op)
 		return '(' .. format(op.getChild()) .. ')+'
 	end
 
-	formatters.And = function(op)
+	function formatters.And(op)
 		return '&(' .. format(op.getChild()) .. ')'
 	end
 
-	formatters.Not = function(op)
+	function formatters.Not(op)
 		return '!(' .. format(op.getChild()) .. ')'
 	end
 
-	formatters.Sequence = function(op)
+	function formatters.Sequence(op)
 		-- table.concat does not call the __concat metamethod
 		local stream = ""
 		for i, child in ipairs(op.getChildren()) do
@@ -103,7 +103,7 @@ local stringifyRule = function(rule, opDecorator)
 		return '(' .. stream .. ')'
 	end
 
-	formatters.Choice = function(op)
+	function formatters.Choice(op)
 		-- table.concat does not call the __concat metamethod
 		local stream = ""
 		for i, child in ipairs(op.getChildren()) do
@@ -115,13 +115,13 @@ local stringifyRule = function(rule, opDecorator)
 		return '(' .. stream .. ')'
 	end
 
-	formatters.Context = function(op)
+	function formatters.Context(op)
 		return '<' .. format(op.getChild()) .. '>'
 	end
 
-	formatters.Action = function(op)
+	function formatters.Action(op)
 		local info = debug.getinfo(op.action)
-		local name = info.short_src:match("^.+[/\\](.+)$") --
+		local name = info.short_src:match("^.+[/\\](.+)$")
 		.. ":" .. info.linedefined
 		return '(' .. format(op.getChild()) .. '){' .. name .. '}'
 	end
@@ -129,15 +129,15 @@ local stringifyRule = function(rule, opDecorator)
 	return format(rule)
 end
 
-local stringifyGrammar = function(grammar, opDecorator)
+local function stringifyGrammar(grammar, opDecorator)
 
 	-- this simple version can get stuck in loops
 	-- if operators without ids are each other's parents
 
-	local ruleStrings={}
+	local ruleStrings = {}
 
 	for _, op in pairs(grammar) do
-		table.insert(ruleStrings,stringifyRule(op, opDecorator))
+		table.insert(ruleStrings, stringifyRule(op, opDecorator))
 	end
 
 	return ruleStrings

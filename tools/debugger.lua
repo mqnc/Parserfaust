@@ -1,4 +1,3 @@
-local inspect = (require "inspect").inspect
 local stringify = require "pegstringify"
 local opf = require "opfactory"
 local dsp = require "render"
@@ -12,20 +11,16 @@ local BG_COLOR_ACCEPTED = {128, 255, 160}
 local FG_COLOR_REJECTED = {96, 0, 0}
 local BG_COLOR_REJECTED = {255, 160, 160}
 
-local breakPoint = function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)
+local function breakPoint(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)
 	return true
 end
 
-local processUserInput = function()
+local function processUserInput()
 
 	::retry::
 	io.write("break if: ")
 	local userInput = io.read()
-	print("\n\n")
-
-	-- if true then
-	-- 	return
-	-- end
+	print("")
 
 	if userInput == "" then
 		return
@@ -33,10 +28,10 @@ local processUserInput = function()
 		print("terminated")
 		os.exit(0)
 	else
-		local prefix = "function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)\n\treturn "
-		local postfix = "\nend"
+		local before = "function(step, src, pos, ln, col, ctx, stack, inside, ref, match, vals)\n\treturn "
+		local after = "\nend"
 
-		local code = "return " .. prefix .. userInput .. postfix
+		local code = "return " .. before .. userInput .. after
 		local breakPointFactory, err = --
 		load(code, "user-defined break condition")
 		if breakPointFactory == nil then
@@ -66,7 +61,7 @@ local function palette(i)
 	return paletteCache[i]
 end
 
-local renderStack = function(buffer, stack, matchLen)
+local function renderStack(buffer, stack, matchLen)
 
 	local highlighted = stack[#stack].op
 	local highlightTag = {"highlight"}
@@ -140,7 +135,7 @@ local renderStack = function(buffer, stack, matchLen)
 
 end
 
-local renderSnapshot = function(src, matchLen, stack)
+local function renderSnapshot(src, matchLen, stack)
 
 	local pos = stack[#stack].pos
 
@@ -175,7 +170,7 @@ local renderSnapshot = function(src, matchLen, stack)
 end
 
 local lnColCache = {}
-local lnCol = function(src, pos)
+local function lnCol(src, pos)
 	if lnColCache[src] == nil then
 		lnColCache[src] = {}
 	end
@@ -200,7 +195,7 @@ end
 
 local state
 
-local initState = function()
+local function initState()
 	assert(state == nil)
 	state = { --
 		stack = {},
@@ -214,13 +209,13 @@ local initState = function()
 	}
 end
 
-local cleanupState = function()
+local function cleanupState()
 	state = nil
 end
 
-_G.installDebugHooks = function(op)
+function _G.installDebugHooks(op)
 	local parse = op.parse
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 
 		if state == nil then
 			initState()

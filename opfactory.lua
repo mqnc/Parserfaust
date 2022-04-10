@@ -1,5 +1,5 @@
 if _G.installDebugHooks == nil then
-	_G.installDebugHooks = function(...)
+	function _G.installDebugHooks(...)
 		return ...
 	end
 end
@@ -9,7 +9,7 @@ local opf = {}
 opf.Empty = {"empty"} -- used for empty slots in arrays
 opf.Rejected = {"rejected"}
 
-local emptyIfNil = function(arg)
+local function emptyIfNil(arg)
 	if arg ~= nil then
 		return arg
 	else
@@ -17,7 +17,7 @@ local emptyIfNil = function(arg)
 	end
 end
 
-opf.makeOperator = function()
+function opf.makeOperator()
 	local children = {}
 	local ruleName
 
@@ -25,21 +25,21 @@ opf.makeOperator = function()
 
 	op.__type = {"Operator"}
 
-	op.fixRuleName = function(name)
+	function op.fixRuleName(name)
 		assert(ruleName == nil)
 		ruleName = name
 	end
 
-	op.getRuleName = function()
+	function op.getRuleName()
 		return ruleName
 	end
 
-	op.setChild = function(c)
+	function op.setChild(c)
 		assert(c.__type[1] == "Operator")
 		children = {c}
 	end
 
-	op.setChildren = function(cs)
+	function op.setChildren(cs)
 		assert(type(cs) == "table")
 		for _, c in ipairs(cs) do
 			assert(c.__type[1] == "Operator")
@@ -47,23 +47,23 @@ opf.makeOperator = function()
 		children = cs
 	end
 
-	op.getChild = function()
+	function op.getChild()
 		assert(#children == 1)
 		return children[1]
 	end
 
-	op.getChildren = function()
+	function op.getChildren()
 		return children
 	end
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		error("parse function not defined")
 	end
 
 	return op
 end
 
-local makeReference = function(ruleTable, ruleName)
+local function makeReference(ruleTable, ruleName)
 	assert(type(ruleTable) == "table")
 
 	local op = opf.makeOperator()
@@ -72,25 +72,25 @@ local makeReference = function(ruleTable, ruleName)
 	op.ruleTable = ruleTable
 	op.ruleName = ruleName
 
-	op.setChild = function(c)
+	function op.setChild(c)
 		op.ruleTable = {start = c}
 		op.ruleName = "start"
 	end
 
-	op.setChildren = function(cs)
+	function op.setChildren(cs)
 		op.ruleTable = cs
 		op.ruleName = next(cs)
 	end
 
-	op.getChild = function()
+	function op.getChild()
 		return op.ruleTable[op.ruleName]
 	end
 
-	op.getChildren = function()
+	function op.getChildren()
 		return {op.ruleTable[op.ruleName]}
 	end
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		if pos == nil then
 			pos = 1
 		end
@@ -100,7 +100,7 @@ local makeReference = function(ruleTable, ruleName)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeGrammar = function()
+function opf.makeGrammar()
 	local rules = {}
 	local ordered = {}
 	local grammar = {}
@@ -149,22 +149,22 @@ opf.makeGrammar = function()
 	return grammar
 end
 
-opf.makeLiteral = function(str)
+function opf.makeLiteral(str)
 	assert(type(str) == "string")
 
 	local op = opf.makeOperator()
 	table.insert(op.__type, "Literal")
 
-	op.getString = function()
+	function op.getString()
 		return str
 	end
 
 	if str == "" then
-		op.parse = function()
+		function op.parse()
 			return 0
 		end
 	else
-		op.parse = function(src, pos, ctx)
+		function op.parse(src, pos, ctx)
 			if src:sub(pos, pos + #str - 1) == str then
 				return #str
 			else
@@ -176,7 +176,7 @@ opf.makeLiteral = function(str)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeRange = function(from, to)
+function opf.makeRange(from, to)
 	assert(from == nil or type(from) == "string" and #from == 1)
 	assert(to == nil or type(to) == "string" and #to == 1)
 
@@ -186,16 +186,16 @@ opf.makeRange = function(from, to)
 	if from ~= nil and to == nil then
 		to = from
 	end
-	op.getFromTo = function()
+	function op.getFromTo()
 		return from, to
 	end
 
 	if from == nil and to == nil then
-		op.parse = function()
+		function op.parse()
 			return opf.Rejected
 		end
 	else
-		op.parse = function(src, pos, ctx)
+		function op.parse(src, pos, ctx)
 			local c = src:sub(pos, pos)
 			if from <= c and c <= to then
 				return 1
@@ -208,11 +208,11 @@ opf.makeRange = function(from, to)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeAny = function()
+function opf.makeAny()
 	local op = opf.makeOperator()
 	table.insert(op.__type, "Any")
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		if pos > #src then
 			return opf.Rejected
 		else
@@ -223,7 +223,7 @@ opf.makeAny = function()
 	return _G.installDebugHooks(op)
 end
 
-opf.makeRepetition = function(expr, min, max)
+function opf.makeRepetition(expr, min, max)
 	assert(expr.__type[1] == "Operator")
 	assert(type(min) == "number")
 	assert(type(max) == "number")
@@ -241,11 +241,11 @@ opf.makeRepetition = function(expr, min, max)
 	end
 
 	op.setChild(expr)
-	op.getMinMax = function()
+	function op.getMinMax()
 		return min, max
 	end
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		local totalLen = 0
 		local vals = {}
 		for i = 1, max do
@@ -268,7 +268,7 @@ opf.makeRepetition = function(expr, min, max)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeLookAhead = function(expr, isPositive)
+function opf.makeLookAhead(expr, isPositive)
 	assert(expr.__type[1] == "Operator")
 	assert(type(isPositive) == "boolean")
 
@@ -282,11 +282,11 @@ opf.makeLookAhead = function(expr, isPositive)
 	end
 
 	op.setChild(expr)
-	op.isPositive = function()
+	function op.isPositive()
 		return isPositive
 	end
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		local len = op.getChild().parse(src, pos, ctx)
 		if (len ~= opf.Rejected) == isPositive then
 			return 0
@@ -298,7 +298,7 @@ opf.makeLookAhead = function(expr, isPositive)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeSequence = function(...)
+function opf.makeSequence(...)
 	local children = {...}
 	for _, c in ipairs(children) do
 		assert(c.__type[1] == "Operator")
@@ -309,7 +309,7 @@ opf.makeSequence = function(...)
 
 	op.setChildren(children)
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		local totalLen = 0
 		local vals = {}
 
@@ -330,7 +330,7 @@ opf.makeSequence = function(...)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeChoice = function(...)
+function opf.makeChoice(...)
 	local children = {...}
 	for _, c in ipairs(children) do
 		assert(c.__type[1] == "Operator")
@@ -341,7 +341,7 @@ opf.makeChoice = function(...)
 
 	op.setChildren(children)
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		for i, child in ipairs(op.getChildren()) do
 			local len, childVals = child.parse(src, pos, ctx)
 			if len ~= opf.Rejected then
@@ -354,7 +354,7 @@ opf.makeChoice = function(...)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeContext = function(expr, ctx)
+function opf.makeContext(expr, ctx)
 	assert(expr.__type[1] == "Operator")
 	assert(type(ctx) == "table")
 
@@ -364,7 +364,7 @@ opf.makeContext = function(expr, ctx)
 	op.setChild(expr)
 	op.ctx = ctx
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		local newCtx = {}
 		for k, v in pairs(op.ctx) do
 			newCtx[k] = v
@@ -376,7 +376,7 @@ opf.makeContext = function(expr, ctx)
 	return _G.installDebugHooks(op)
 end
 
-opf.makeAction = function(expr, action)
+function opf.makeAction(expr, action)
 	assert(expr.__type[1] == "Operator")
 	assert(type(action) == "function")
 
@@ -386,7 +386,7 @@ opf.makeAction = function(expr, action)
 	op.setChild(expr)
 	op.action = action
 
-	op.parse = function(src, pos, ctx)
+	function op.parse(src, pos, ctx)
 		local len, vals = op.getChild().parse(src, pos, ctx)
 		if len == opf.Rejected then
 			return opf.Rejected

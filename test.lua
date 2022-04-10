@@ -1,14 +1,17 @@
+package.path = "tools/?.lua;" .. package.path
+
 require "debugger"
-local makePegGrammar = require "pegfactory"
 local inspect = (require "inspect").inspect
-local utils = require "utils"
+local fileio = require "fileio"
 local stringify = require "pegstringify"
+
+local makePegGrammar = require "pegfactory"
 
 local parser = makePegGrammar()
 
 print(table.concat(stringify.stringifyGrammar(parser), "\n"))
 
-local source = utils.readFile(arg[0]:gsub("test.lua", "peg.peg"))
+local source = fileio.readFile(arg[0]:gsub("test.lua", "peg.peg"))
 
 local _, parser2 = parser["Grammar"].parse(source)
 
